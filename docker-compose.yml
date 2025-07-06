@@ -1,0 +1,45 @@
+version: '3.8'
+
+services:
+  # Redis service for caching and session management
+  redis:
+    image: redis:7.4-alpine
+    container_name: realtime-yjs-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+
+  # Main application service
+  app:
+    build: .
+    container_name: realtime-yjs-server
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - REDIS_URL=redis://redis:6379
+      - JWT_SECRET=${JWT_SECRET:-your-super-secret-jwt-key-change-in-production}
+      - DJANGO_API_URL=${DJANGO_API_URL:-http://localhost:8000}
+      - AUTH_TEST_MODE=${AUTH_TEST_MODE:-false}
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    volumes:
+      - ./logs:/app/logs
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000/health', (res) => { if (res.statusCode === 200) process.exit(0); else process.exit(1); }).on('error', () => process.exit(1));"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+
+volumes:
+  redis_data:

@@ -1,0 +1,82 @@
+import { useState } from 'react'
+import { useYjsProvider } from '../hooks/useYjsProvider.jsx'
+import TiptapEditor from './TiptapEditor'
+import ConnectionStatus from './ConnectionStatus'
+
+const EditorSection = ({ user, token, onLogout }) => {
+  const [documentId] = useState('tiptap-demo') // Fixed document ID for now
+  
+  const {
+    provider,
+    doc,
+    connectionStatus,
+    connectedUsers,
+    error,
+    isConnected
+  } = useYjsProvider(documentId, token, user)
+
+  return (
+    <div className="editor-section">
+      <div className="editor-header">
+        <div className="header-left">
+          <h2>Collaborative Editor</h2>
+          <p>Document: <strong>{documentId}</strong></p>
+        </div>
+        <div className="header-right">
+          <div className="user-info">
+            <span className="user-icon">👤</span>
+            <span className="user-name">{user.username}</span>
+          </div>
+          <button
+            className="btn btn-secondary btn-small"
+            onClick={onLogout}
+          >
+            Logout
+          </button>
+        </div>
+      </div>
+
+      <div className="editor-layout">
+        <div className="editor-main">
+          {/* Only render editor when we have both doc and provider */}
+          {doc && provider ? (
+            <TiptapEditor
+              doc={doc}
+              provider={provider}
+              user={user}
+              isConnected={isConnected}
+            />
+          ) : (
+            <div className="editor-container">
+              <div className="editor-loading">
+                <h3>Setting up collaboration...</h3>
+                <p>Initializing YJS document and WebSocket provider...</p>
+                <p><small>This should only take a moment.</small></p>
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div className="editor-sidebar">
+          <ConnectionStatus
+            connectionStatus={connectionStatus}
+            connectedUsers={connectedUsers}
+            user={user}
+            error={error}
+            documentId={documentId}
+          />
+        </div>
+      </div>
+
+      {error && (
+        <div className="editor-error">
+          <h4>Connection Error</h4>
+          <p>{error}</p>
+          <p>Please check your connection and try refreshing the page.</p>
+        </div>
+      )}
+    </div>
+  )
+}
+
+export default EditorSection
