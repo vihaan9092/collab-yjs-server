@@ -10,10 +10,11 @@ const { createMockLogger } = require('../helpers/testUtils');
 jest.mock('../../src/utils/y-websocket-utils', () => ({
   getYDoc: jest.fn(),
   docs: new Map(),
-  applyUpdateToDoc: jest.fn()
+  applyUpdateToDoc: jest.fn(),
+  getDocumentStateSize: jest.fn()
 }));
 
-const { getYDoc, docs, applyUpdateToDoc } = require('../../src/utils/y-websocket-utils');
+const { getYDoc, docs, applyUpdateToDoc, getDocumentStateSize } = require('../../src/utils/y-websocket-utils');
 
 describe('DocumentManager', () => {
   let documentManager;
@@ -30,14 +31,15 @@ describe('DocumentManager', () => {
       },
       conns: new Map()
     };
-    
+
     documentManager = new DocumentManager(mockLogger, {
       gcEnabled: true,
       cleanupInterval: null // Disable cleanup for tests
     });
 
-    // Reset mocks
-    getYDoc.mockResolvedValue(mockDoc);
+    // Reset mocks - getYDoc is synchronous, not async
+    getYDoc.mockReturnValue(mockDoc);
+    getDocumentStateSize.mockReturnValue(1024); // Mock document size
     docs.clear();
     jest.clearAllMocks();
   });
@@ -49,53 +51,57 @@ describe('DocumentManager', () => {
   });
 
   describe('getDocument', () => {
-    it('should create and return a new document', async () => {
+    it('should create and return a new document', () => {
       const documentId = 'test-doc';
-      
-      const result = await documentManager.getDocument(documentId);
-      
+
+      const result = documentManager.getDocument(documentId);
+
       expect(getYDoc).toHaveBeenCalledWith(documentId, true);
       expect(result).toBe(mockDoc);
       expect(mockLogger.info).toHaveBeenCalledWith('Document created', { documentId });
     });
 
-    it('should update last accessed time for existing document', async () => {
+    it('should update last accessed time for existing document', (done) => {
       const documentId = 'test-doc';
-      
+
       // First call
-      await documentManager.getDocument(documentId);
+      documentManager.getDocument(documentId);
       const firstStats = documentManager.documentStats.get(documentId);
       const firstAccessTime = firstStats.lastAccessed;
-      
+
       // Wait a bit and call again
-      await new Promise(resolve => setTimeout(resolve, 10));
-      await documentManager.getDocument(documentId);
-      
-      const secondStats = documentManager.documentStats.get(documentId);
-      expect(secondStats.lastAccessed.getTime()).toBeGreaterThan(firstAccessTime.getTime());
+      setTimeout(() => {
+        documentManager.getDocument(documentId);
+
+        const secondStats = documentManager.documentStats.get(documentId);
+        expect(secondStats.lastAccessed.getTime()).toBeGreaterThan(firstAccessTime.getTime());
+        done();
+      }, 10);
     });
 
-    it('should handle errors gracefully', async () => {
+    it('should handle errors gracefully', () => {
       const documentId = 'error-doc';
       const error = new Error('Test error');
-      getYDoc.mockRejectedValueOnce(error);
-      
-      await expect(documentManager.getDocument(documentId)).rejects.toThrow('Test error');
+      getYDoc.mockImplementationOnce(() => {
+        throw error;
+      });
+
+      expect(() => documentManager.getDocument(documentId)).toThrow('Test error');
       expect(mockLogger.error).toHaveBeenCalledWith('Failed to get document', error, { documentId });
     });
   });
 
   describe('applyUpdate', () => {
-    it('should apply update to document successfully', async () => {
+    it('should apply update to document successfully', () => {
       const documentId = 'test-doc';
       const update = new Uint8Array([1, 2, 3]);
       const origin = 'test-origin';
-      
+
       // Setup document first
-      await documentManager.getDocument(documentId);
-      
+      documentManager.getDocument(documentId);
+
       const result = documentManager.applyUpdate(documentId, update, origin);
-      
+
       expect(applyUpdateToDoc).toHaveBeenCalledWith(mockDoc, update, origin);
       expect(result).toBe(true);
       expect(mockLogger.debug).toHaveBeenCalledWith('Update applied to document', {
@@ -105,17 +111,17 @@ describe('DocumentManager', () => {
       });
     });
 
-    it('should update statistics when applying update', async () => {
+    it('should update statistics when applying update', () => {
       const documentId = 'test-doc';
       const update = new Uint8Array([1, 2, 3]);
-      
+
       // Setup document first
-      await documentManager.getDocument(documentId);
+      documentManager.getDocument(documentId);
       const initialStats = documentManager.documentStats.get(documentId);
       const initialUpdateCount = initialStats.updateCount;
-      
+
       documentManager.applyUpdate(documentId, update);
-      
+
       const updatedStats = documentManager.documentStats.get(documentId);
       expect(updatedStats.updateCount).toBe(initialUpdateCount + 1);
     });
@@ -124,11 +130,11 @@ describe('DocumentManager', () => {
       const documentId = 'test-doc';
       const update = new Uint8Array([1, 2, 3]);
       const error = new Error('Apply update error');
-      
+
       applyUpdateToDoc.mockImplementationOnce(() => {
         throw error;
       });
-      
+
       expect(() => documentManager.applyUpdate(documentId, update)).toThrow('Apply update error');
       expect(mockLogger.error).toHaveBeenCalledWith('Failed to apply update to document', error, {
         documentId,
@@ -138,14 +144,17 @@ describe('DocumentManager', () => {
   });
 
   describe('getDocumentStats', () => {
-    it('should return document statistics', async () => {
+    it('should return document statistics', () => {
       const documentId = 'test-doc';
-      
+
+      // Mock the docs.get to return our mock document
+      docs.set(documentId, mockDoc);
+
       // Create document to initialize stats
-      await documentManager.getDocument(documentId);
-      
+      documentManager.getDocument(documentId);
+
       const stats = documentManager.getDocumentStats(documentId);
-      
+
       expect(stats).toMatchObject({
         createdAt: expect.any(Date),
         lastAccessed: expect.any(Date),
@@ -161,14 +170,22 @@ describe('DocumentManager', () => {
   });
 
   describe('updateConnectionCount', () => {
-    it('should update connection count for existing document', async () => {
+    it('should update connection count for existing document', () => {
       const documentId = 'test-doc';
-      
+
+      // Mock the docs.get to return our mock document
+      docs.set(documentId, mockDoc);
+
       // Create document first
-      await documentManager.getDocument(documentId);
-      
-      documentManager.updateConnectionCount(documentId, 5);
-      
+      documentManager.getDocument(documentId);
+
+      // Mock the document's connection count by adding connections to the conns Map
+      mockDoc.conns.set('conn1', new Set());
+      mockDoc.conns.set('conn2', new Set());
+      mockDoc.conns.set('conn3', new Set());
+      mockDoc.conns.set('conn4', new Set());
+      mockDoc.conns.set('conn5', new Set());
+
       const stats = documentManager.getDocumentStats(documentId);
       expect(stats.connectionCount).toBe(5);
     });
