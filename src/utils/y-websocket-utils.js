@@ -2,6 +2,7 @@ const Y = require('yjs');
 const encoding = require('lib0/encoding');
 const decoding = require('lib0/decoding');
 const map = require('lib0/map');
+const { getDebounceConfig, logDebounceConfig } = require('../config/debounceConfig');
 
 // Dynamic imports for ES modules
 let syncProtocol, awarenessProtocol;
@@ -44,6 +45,17 @@ class WSSharedDoc extends Y.Doc {
     // Awareness instance - will be initialized after modules are loaded
     this.awareness = null;
     this.initialized = false;
+
+    // Debouncing configuration
+    this.debounceConfig = getDebounceConfig();
+
+    // Debouncing state
+    this.debounceState = {
+      timer: null,
+      pendingUpdates: [],
+      firstUpdateTime: null,
+      lastUpdateTime: null,
+    };
   }
 
   /**
@@ -84,17 +96,135 @@ class WSSharedDoc extends Y.Doc {
     };
     
     this.awareness.on('update', awarenessChangeHandler);
-    
-    // Handle document updates
+
+    // Handle document updates with optional debouncing
     this.on('update', (update, origin, doc) => {
-      const encoder = encoding.createEncoder();
-      encoding.writeVarUint(encoder, messageSync);
-      syncProtocol.writeUpdate(encoder, update);
-      const message = encoding.toUint8Array(encoder);
-      doc.conns.forEach((_, conn) => send(doc, conn, message));
+      if (this.debounceConfig.enabled) {
+        this.handleDebouncedUpdate(update, origin, doc);
+      } else {
+        this.handleImmediateUpdate(update, origin, doc);
+      }
     });
 
     this.initialized = true;
+  }
+
+  /**
+   * Handle immediate document update (original behavior)
+   * @param {Uint8Array} update - The Y.js update
+   * @param {any} origin - The origin of the update
+   * @param {WSSharedDoc} doc - The document instance
+   */
+  handleImmediateUpdate(update, origin, doc) {
+    const encoder = encoding.createEncoder();
+    encoding.writeVarUint(encoder, messageSync);
+    syncProtocol.writeUpdate(encoder, update);
+    const message = encoding.toUint8Array(encoder);
+    doc.conns.forEach((_, conn) => send(doc, conn, message));
+  }
+
+  /**
+   * Handle debounced document update
+   * @param {Uint8Array} update - The Y.js update
+   * @param {any} origin - The origin of the update
+   * @param {WSSharedDoc} doc - The document instance
+   */
+  handleDebouncedUpdate(update, origin, doc) {
+    const now = Date.now();
+
+    // Store the update
+    this.debounceState.pendingUpdates.push({
+      update,
+      origin,
+      timestamp: now
+    });
+
+    // Track timing
+    if (!this.debounceState.firstUpdateTime) {
+      this.debounceState.firstUpdateTime = now;
+    }
+    this.debounceState.lastUpdateTime = now;
+
+    // Clear existing timer
+    if (this.debounceState.timer) {
+      clearTimeout(this.debounceState.timer);
+    }
+
+    // Check if we've exceeded max delay - force send immediately
+    const timeSinceFirst = now - (this.debounceState.firstUpdateTime || now);
+    if (timeSinceFirst >= this.debounceConfig.maxDelay) {
+      this.flushPendingUpdates(doc);
+      return;
+    }
+
+    // Set new debounce timer
+    this.debounceState.timer = setTimeout(() => {
+      this.flushPendingUpdates(doc);
+    }, this.debounceConfig.delay);
+  }
+
+  /**
+   * Flush all pending updates as a single combined update
+   * @param {WSSharedDoc} doc - The document instance
+   */
+  flushPendingUpdates(doc) {
+    if (this.debounceState.pendingUpdates.length === 0) {
+      return;
+    }
+
+    try {
+      // Combine all pending updates into a single update
+      const updates = this.debounceState.pendingUpdates.map(item => item.update);
+
+      if (updates.length === 1) {
+        // Single update - send as is
+        const encoder = encoding.createEncoder();
+        encoding.writeVarUint(encoder, messageSync);
+        syncProtocol.writeUpdate(encoder, updates[0]);
+        const message = encoding.toUint8Array(encoder);
+        doc.conns.forEach((_, conn) => send(doc, conn, message));
+      } else {
+        // Multiple updates - merge them
+        const mergedUpdate = Y.mergeUpdates(updates);
+        const encoder = encoding.createEncoder();
+        encoding.writeVarUint(encoder, messageSync);
+        syncProtocol.writeUpdate(encoder, mergedUpdate);
+        const message = encoding.toUint8Array(encoder);
+        doc.conns.forEach((_, conn) => send(doc, conn, message));
+      }
+
+      // Reset debounce state
+      this.resetDebounceState();
+
+    } catch (error) {
+      console.error('Error flushing pending updates:', error);
+      // Fallback: send updates individually
+      this.debounceState.pendingUpdates.forEach(item => {
+        this.handleImmediateUpdate(item.update, item.origin, doc);
+      });
+      this.resetDebounceState();
+    }
+  }
+
+  /**
+   * Reset debounce state
+   */
+  resetDebounceState() {
+    if (this.debounceState.timer) {
+      clearTimeout(this.debounceState.timer);
+      this.debounceState.timer = null;
+    }
+    this.debounceState.pendingUpdates = [];
+    this.debounceState.firstUpdateTime = null;
+    this.debounceState.lastUpdateTime = null;
+  }
+
+  /**
+   * Cleanup method to clear any pending timers
+   */
+  destroy() {
+    this.resetDebounceState();
+    super.destroy();
   }
 }
 

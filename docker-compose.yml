@@ -29,6 +29,9 @@ services:
       - JWT_SECRET=${JWT_SECRET:-your-super-secret-jwt-key-change-in-production}
       - DJANGO_API_URL=${DJANGO_API_URL:-http://localhost:8000}
       - AUTH_TEST_MODE=${AUTH_TEST_MODE:-false}
+      - DEBOUNCE_ENABLED=${DEBOUNCE_ENABLED:-true}
+      - DEBOUNCE_DELAY=${DEBOUNCE_DELAY:-300}
+      - DEBOUNCE_MAX_DELAY=${DEBOUNCE_MAX_DELAY:-1000}
     depends_on:
       redis:
         condition: service_healthy
