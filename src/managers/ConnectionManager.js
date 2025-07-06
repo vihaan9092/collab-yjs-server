@@ -13,6 +13,13 @@ class ConnectionManager extends IConnectionManager {
     this.logger = logger;
     this.connections = new Map(); // connectionId -> connection metadata
     this.documentConnections = new Map(); // documentId -> Set of connectionIds
+    this.wsToConnectionId = new Map(); // WebSocket -> connectionId (for O(1) lookup)
+    this.connectionTimeouts = new Map(); // connectionId -> timeout handle
+
+    // Start periodic cleanup
+    this.cleanupInterval = setInterval(() => {
+      this.cleanupStaleConnections();
+    }, 60000); // Clean up every minute
   }
 
   addConnection(connectionId, ws, metadata = {}) {
@@ -24,10 +31,14 @@ class ConnectionManager extends IConnectionManager {
         userId: metadata.userId,
         joinedAt: new Date(),
         lastActivity: new Date(),
+        isActive: true,
         ...metadata
       };
 
       this.connections.set(connectionId, connection);
+
+      // Add reverse lookup for O(1) WebSocket to connectionId mapping
+      this.wsToConnectionId.set(ws, connectionId);
 
       // Track document connections
       if (connection.documentId) {
@@ -36,6 +47,9 @@ class ConnectionManager extends IConnectionManager {
         }
         this.documentConnections.get(connection.documentId).add(connectionId);
       }
+
+      // Set up connection timeout (30 minutes of inactivity)
+      this.resetConnectionTimeout(connectionId);
 
       this.logger.info('Connection added', {
         connectionId,
@@ -57,6 +71,17 @@ class ConnectionManager extends IConnectionManager {
         this.logger.warn('Attempted to remove non-existent connection', { connectionId });
         return false;
       }
+
+      // Mark as inactive first
+      connection.isActive = false;
+
+      // Remove from reverse lookup
+      if (connection.ws) {
+        this.wsToConnectionId.delete(connection.ws);
+      }
+
+      // Clear connection timeout
+      this.clearConnectionTimeout(connectionId);
 
       // Remove from document connections
       if (connection.documentId) {
@@ -118,12 +143,8 @@ class ConnectionManager extends IConnectionManager {
   }
 
   findConnectionIdByWs(ws) {
-    for (const [connectionId, connection] of this.connections) {
-      if (connection.ws === ws) {
-        return connectionId;
-      }
-    }
-    return null;
+    // O(1) lookup using reverse index
+    return this.wsToConnectionId.get(ws) || null;
   }
 
   getConnectionCount() {
@@ -170,7 +191,121 @@ class ConnectionManager extends IConnectionManager {
     const connection = this.connections.get(connectionId);
     if (connection) {
       connection.lastActivity = new Date();
+      // Reset the timeout when there's activity
+      this.resetConnectionTimeout(connectionId);
     }
+  }
+
+  /**
+   * Reset connection timeout for inactive connections
+   */
+  resetConnectionTimeout(connectionId) {
+    // Clear existing timeout
+    this.clearConnectionTimeout(connectionId);
+
+    // Set new timeout (30 minutes)
+    const timeoutHandle = setTimeout(() => {
+      this.handleConnectionTimeout(connectionId);
+    }, 30 * 60 * 1000); // 30 minutes
+
+    this.connectionTimeouts.set(connectionId, timeoutHandle);
+  }
+
+  /**
+   * Clear connection timeout
+   */
+  clearConnectionTimeout(connectionId) {
+    const timeoutHandle = this.connectionTimeouts.get(connectionId);
+    if (timeoutHandle) {
+      clearTimeout(timeoutHandle);
+      this.connectionTimeouts.delete(connectionId);
+    }
+  }
+
+  /**
+   * Handle connection timeout
+   */
+  handleConnectionTimeout(connectionId) {
+    const connection = this.connections.get(connectionId);
+    if (connection) {
+      this.logger.info('Connection timed out due to inactivity', {
+        connectionId,
+        documentId: connection.documentId,
+        userId: connection.userId,
+        lastActivity: connection.lastActivity
+      });
+
+      // Close the WebSocket if it's still open
+      if (connection.ws && connection.ws.readyState === 1) {
+        connection.ws.close(1000, 'Connection timeout');
+      }
+
+      // Remove the connection
+      this.removeConnection(connectionId);
+    }
+  }
+
+  /**
+   * Clean up stale connections
+   */
+  cleanupStaleConnections() {
+    const now = new Date();
+    const staleConnections = [];
+
+    for (const [connectionId, connection] of this.connections) {
+      // Check if WebSocket is closed
+      if (connection.ws && connection.ws.readyState === 3) { // WebSocket.CLOSED
+        staleConnections.push(connectionId);
+        continue;
+      }
+
+      // Check for very old inactive connections (2 hours)
+      const inactiveTime = now - connection.lastActivity;
+      if (inactiveTime > 2 * 60 * 60 * 1000) { // 2 hours
+        staleConnections.push(connectionId);
+      }
+    }
+
+    if (staleConnections.length > 0) {
+      this.logger.info('Cleaning up stale connections', {
+        count: staleConnections.length,
+        connectionIds: staleConnections
+      });
+
+      staleConnections.forEach(connectionId => {
+        this.removeConnection(connectionId);
+      });
+    }
+  }
+
+  /**
+   * Destroy the connection manager and clean up resources
+   */
+  destroy() {
+    // Clear all timeouts
+    for (const timeoutHandle of this.connectionTimeouts.values()) {
+      clearTimeout(timeoutHandle);
+    }
+    this.connectionTimeouts.clear();
+
+    // Clear cleanup interval
+    if (this.cleanupInterval) {
+      clearInterval(this.cleanupInterval);
+    }
+
+    // Close all connections
+    for (const connection of this.connections.values()) {
+      if (connection.ws && connection.ws.readyState === 1) {
+        connection.ws.close(1000, 'Server shutdown');
+      }
+    }
+
+    // Clear all maps
+    this.connections.clear();
+    this.documentConnections.clear();
+    this.wsToConnectionId.clear();
+
+    this.logger.info('ConnectionManager destroyed');
   }
 
   getConnectionStats() {

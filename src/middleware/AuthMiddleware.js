@@ -119,9 +119,35 @@ class AuthMiddleware {
      * @returns {boolean} - True if valid base64url
      */
     isValidBase64Url(str) {
+        if (!str || typeof str !== 'string') {
+            return false;
+        }
+
         // Base64url uses A-Z, a-z, 0-9, -, _ and no padding
+        // But we need to be more lenient for real-world JWTs
         const base64urlRegex = /^[A-Za-z0-9_-]+$/;
-        return base64urlRegex.test(str);
+
+        // Try the strict check first
+        if (base64urlRegex.test(str)) {
+            return true;
+        }
+
+        // If strict check fails, try to validate by attempting to decode
+        try {
+            // Convert base64url to base64 if needed
+            let base64 = str.replace(/-/g, '+').replace(/_/g, '/');
+
+            // Add padding if needed
+            while (base64.length % 4) {
+                base64 += '=';
+            }
+
+            // Try to decode
+            Buffer.from(base64, 'base64');
+            return true;
+        } catch (error) {
+            return false;
+        }
     }
 
     /**
@@ -135,13 +161,31 @@ class AuthMiddleware {
                 throw new Error('No token provided');
             }
 
+            // Ensure token is a string and handle URL encoding
+            let cleanToken = String(token);
+
+            // Decode URL-encoded token if necessary
+            try {
+                if (cleanToken.includes('%')) {
+                    cleanToken = decodeURIComponent(cleanToken);
+                }
+            } catch (decodeError) {
+                this.logger.warn('Failed to decode URL-encoded token', {
+                    service: 'realtime-yjs-server',
+                    error: decodeError.message
+                });
+            }
+
+            // Remove 'Bearer ' prefix if present
+            cleanToken = cleanToken.replace(/^Bearer\s+/, '');
+
             // Comprehensive JWT syntax validation
-            const jwtValidation = this.validateJWTSyntax(token);
+            const jwtValidation = this.validateJWTSyntax(cleanToken);
             if (!jwtValidation.isValid) {
                 this.logger.warn('JWT syntax validation failed', {
                     service: 'realtime-yjs-server',
                     error: jwtValidation.error,
-                    tokenLength: token.length
+                    tokenLength: cleanToken.length
                 });
                 throw new Error(`Invalid JWT format: ${jwtValidation.error}`);
             }
@@ -149,12 +193,9 @@ class AuthMiddleware {
             this.logger.debug('Starting token validation', {
                 service: 'realtime-yjs-server',
                 testMode: this.testMode,
-                tokenLength: token.length,
+                tokenLength: cleanToken.length,
                 hasJwtSecret: !!this.jwtSecret
             });
-
-            // Remove 'Bearer ' prefix if present
-            const cleanToken = token.replace(/^Bearer\s+/, '');
 
             // In test mode, bypass JWT verification and create a mock user
             if (this.testMode) {
@@ -165,8 +206,10 @@ class AuthMiddleware {
 
                 this.logger.debug('Test mode token processing', {
                     service: 'realtime-yjs-server',
-                    tokenPreview: cleanToken.substring(0, 20) + '...'
+                    tokenPreview: cleanToken.substring(0, Math.min(20, cleanToken.length)) + '...'
                 });
+
+                console.log("clean token", cleanToken);
 
                 // Try to decode the token without verification to extract user info
                 let userInfo = {};

@@ -1,4 +1,5 @@
 const { docs } = require('../utils/y-websocket-utils');
+const { extractDocumentId, parseDocumentMetadata } = require('../utils/DocumentUtils');
 
 /**
  * WebSocket Handler for y-websocket
@@ -20,14 +21,16 @@ class WebSocketHandler {
    * @param {Object} req - HTTP request object
    */
   handleConnection(ws, req) {
-    const url = new URL(req.url, `http://${req.headers.host}`);
-    const documentId = url.pathname.slice(1) || 'default'; // Remove leading slash
-    const userId = url.searchParams.get('userId') || `user-${Date.now()}`;
-    
-    this.logger.info('New WebSocket connection', { 
-      documentId, 
+    // Use consistent document ID extraction
+    const documentId = extractDocumentId(req);
+    const documentMetadata = parseDocumentMetadata(req);
+    const userId = documentMetadata.searchParams.userId || `user-${Date.now()}`;
+
+    this.logger.info('New WebSocket connection', {
+      documentId,
       userId,
-      origin: req.headers.origin 
+      documentMetadata,
+      origin: req.headers.origin
     });
 
     // Generate connection ID

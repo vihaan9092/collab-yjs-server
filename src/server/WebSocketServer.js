@@ -5,6 +5,7 @@ const cors = require('cors');
 const helmet = require('helmet');
 const url = require('url');
 const { setupWSConnection } = require('../utils/y-websocket-utils');
+const { extractDocumentId, parseDocumentMetadata } = require('../utils/DocumentUtils');
 const AuthMiddleware = require('../middleware/AuthMiddleware');
 const AuthConfig = require('../config/AuthConfig');
 
@@ -105,7 +106,7 @@ class WebSocketServer {
         if (!token) {
           return res.status(401).json({ authenticated: false, error: 'No token provided' });
         }
-
+        
         const userInfo = await this.authMiddleware.validateToken(token);
         if (!userInfo) {
           return res.status(401).json({ authenticated: false, error: 'Invalid token' });
@@ -248,14 +249,15 @@ class WebSocketServer {
 
       // Handle WebSocket connections using y-websocket setup
       this.wss.on('connection', async (ws, req) => {
-        // Document ID will be determined by YJS protocol, not URL path
-        const documentId = 'pending'; // Will be updated when YJS establishes document connection
+        // Extract document ID using consistent utility function
+        const documentId = extractDocumentId(req);
+        const documentMetadata = parseDocumentMetadata(req);
         const connectionId = `ws-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`;
 
         this.logger.info('New WebSocket connection', {
           connectionId,
-          url: req.url,
           documentId,
+          documentMetadata,
           origin: req.headers.origin
         });
 
@@ -319,38 +321,35 @@ class WebSocketServer {
           }
         });
 
-        // Use y-websocket connection setup with proper document ID extraction
+        // Use y-websocket connection setup with consistent document ID
         try {
-          // Extract document ID from URL path (remove leading slash and query params)
-          const urlPath = req.url.split('?')[0];
-          const extractedDocId = urlPath.slice(1) || 'default'; // Remove leading slash
-
           this.logger.info('Setting up YJS WebSocket connection', {
             connectionId,
-            extractedDocId,
+            documentId,
             originalUrl: req.url,
             userId
           });
 
           this.logger.debug('Calling setupWSConnection', {
             connectionId,
-            documentId: extractedDocId,
+            documentId,
             service: 'realtime-yjs-server'
           });
 
           await setupWSConnection(ws, req, {
-            docName: extractedDocId,
+            docName: documentId,
             gc: true
           });
+
           this.logger.info('YJS WebSocket connection established successfully', {
             connectionId,
-            documentId: extractedDocId,
+            documentId,
             userId
           });
 
           this.logger.debug('WebSocket connection details', {
             connectionId,
-            documentId: extractedDocId,
+            documentId,
             userId,
             userAgent: req.headers['user-agent'],
             origin: req.headers.origin,
@@ -401,6 +400,8 @@ class WebSocketServer {
             socket.destroy();
             return;
           }
+
+          console.log("Token", token);
 
           // Validate token
           const userInfo = await this.authMiddleware.validateToken(token);

@@ -213,13 +213,26 @@ class DocumentManager extends IDocumentManager {
       clearInterval(this.cleanupInterval);
     }
 
-    // Destroy all documents
-    this.documents.forEach((doc, documentId) => {
-      doc.destroy();
-    });
+    // Destroy all documents from the global docs map
+    if (docs && typeof docs.forEach === 'function') {
+      docs.forEach((doc, documentId) => {
+        try {
+          if (doc && typeof doc.destroy === 'function') {
+            doc.destroy();
+          }
+        } catch (error) {
+          this.logger.warn('Error destroying document', { documentId, error: error.message });
+        }
+      });
 
-    this.documents.clear();
-    this.documentStats.clear();
+      // Clear the global docs map
+      docs.clear();
+    }
+
+    // Clear local stats
+    if (this.documentStats) {
+      this.documentStats.clear();
+    }
 
     this.logger.info('DocumentManager destroyed');
   }
