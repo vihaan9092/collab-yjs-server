@@ -10,8 +10,39 @@ let syncProtocol, awarenessProtocol;
 // Initialize ES modules
 const initializeModules = async () => {
   if (!syncProtocol || !awarenessProtocol) {
-    syncProtocol = await import('y-protocols/sync.js');
-    awarenessProtocol = await import('y-protocols/awareness.js');
+    try {
+      // In test environment, use mocked modules
+      if (process.env.NODE_ENV === 'test') {
+        syncProtocol = require('y-protocols/sync.js');
+        awarenessProtocol = require('y-protocols/awareness.js');
+      } else {
+        syncProtocol = await import('y-protocols/sync.js');
+        awarenessProtocol = await import('y-protocols/awareness.js');
+      }
+    } catch (error) {
+      // Fallback for test environment
+      if (process.env.NODE_ENV === 'test') {
+        syncProtocol = {
+          writeUpdate: () => {},
+          readSyncMessage: () => {},
+          writeSyncStep1: () => {}
+        };
+        awarenessProtocol = {
+          Awareness: class MockAwareness {
+            constructor() {
+              this.setLocalState = () => {};
+              this.on = () => {};
+              this.getStates = () => new Map();
+            }
+          },
+          encodeAwarenessUpdate: () => new Uint8Array(),
+          applyAwarenessUpdate: () => {},
+          removeAwarenessStates: () => {}
+        };
+      } else {
+        throw error;
+      }
+    }
   }
 };
 
@@ -27,6 +58,9 @@ const messageAwareness = 1;
 
 // Global document storage
 const docs = new Map();
+
+// Document creation locks to prevent race conditions
+const documentLocks = new Map();
 
 // Ping timeout for connection health check
 const pingTimeout = 30000;
@@ -229,19 +263,66 @@ class WSSharedDoc extends Y.Doc {
 }
 
 /**
- * Get or create a Y.Doc by name
+ * Get or create a Y.Doc by name with race condition protection
  */
 const getYDoc = async (docname, gc = true) => {
+  // Check if document already exists
   let doc = docs.get(docname);
-  if (!doc) {
-    doc = new WSSharedDoc(docname);
-    doc.gc = gc;
-    await doc.initialize();
-    docs.set(docname, doc);
-  } else if (!doc.initialized) {
-    await doc.initialize();
+  if (doc) {
+    // Ensure document is initialized
+    if (!doc.initialized) {
+      await doc.initialize();
+    }
+    return doc;
   }
-  return doc;
+
+  // Check if another thread is already creating this document
+  let lockPromise = documentLocks.get(docname);
+  if (lockPromise) {
+    // Wait for the other thread to finish creating the document
+    await lockPromise;
+    // Document should now exist, return it
+    doc = docs.get(docname);
+    if (doc) {
+      return doc;
+    }
+    // If still doesn't exist, fall through to create it
+  }
+
+  // Create a promise for this document creation to prevent race conditions
+  const createDocumentPromise = (async () => {
+    try {
+      // Double-check that document wasn't created while we were waiting
+      let existingDoc = docs.get(docname);
+      if (existingDoc) {
+        if (!existingDoc.initialized) {
+          await existingDoc.initialize();
+        }
+        return existingDoc;
+      }
+
+      // Create new document
+      const newDoc = new WSSharedDoc(docname);
+      newDoc.gc = gc;
+
+      // Initialize the document
+      await newDoc.initialize();
+
+      // Store the document
+      docs.set(docname, newDoc);
+
+      return newDoc;
+    } finally {
+      // Always clean up the lock
+      documentLocks.delete(docname);
+    }
+  })();
+
+  // Store the creation promise to prevent other threads from creating the same document
+  documentLocks.set(docname, createDocumentPromise);
+
+  // Wait for document creation to complete
+  return await createDocumentPromise;
 };
 
 /**

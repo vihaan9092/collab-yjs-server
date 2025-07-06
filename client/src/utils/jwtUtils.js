@@ -77,18 +77,18 @@ export const TEST_USERS = [
     username: 'user1',
     userId: 1,
     permissions: ['read', 'write'],
-    token: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoxLCJ1c2VybmFtZSI6InVzZXIxIiwiZW1haWwiOiJ1c2VyMUBleGFtcGxlLmNvbSIsInBlcm1pc3Npb25zIjpbInJlYWQiLCJ3cml0ZSJdLCJpc3MiOiJjb2xsYWJvcmF0aW9uLXNlcnZlciIsImF1ZCI6ImNvbGxhYm9yYXRpb24tY2xpZW50cyIsImlhdCI6MTc1MTgyMTc3NSwiZXhwIjoxNzUxOTA4MTc1fQ.WZS21Ur-pRFkQklN6eej2vJKxZSbYFxW-T6mvdSsjkM'
+    token: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoxLCJ1c2VybmFtZSI6InVzZXIxIiwiZW1haWwiOiJ1c2VyMUBleGFtcGxlLmNvbSIsInBlcm1pc3Npb25zIjpbInJlYWQiLCJ3cml0ZSJdLCJpc3MiOiJjb2xsYWJvcmF0aW9uLXNlcnZlciIsImF1ZCI6ImNvbGxhYm9yYXRpb24tY2xpZW50cyIsImlhdCI6MTc1MTgzNTUwMCwiZXhwIjoxNzUxOTIxOTAwfQ.d-YWi9KMgCN92x2O0TF07GfMwTslLrZ_8fm90jejgbo'
   },
   {
     username: 'user2',
     userId: 2,
     permissions: ['read', 'write'],
-    token: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoyLCJ1c2VybmFtZSI6InVzZXIyIiwiZW1haWwiOiJ1c2VyMkBleGFtcGxlLmNvbSIsInBlcm1pc3Npb25zIjpbInJlYWQiLCJ3cml0ZSJdLCJpc3MiOiJjb2xsYWJvcmF0aW9uLXNlcnZlciIsImF1ZCI6ImNvbGxhYm9yYXRpb24tY2xpZW50cyIsImlhdCI6MTc1MTgyMTc3NSwiZXhwIjoxNzUxOTA4MTc1fQ.jHpTsqb0NuIFr-QzjLUu-JrCSTWCV6QjilWzh_Yeys8'
+    token: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoyLCJ1c2VybmFtZSI6InVzZXIyIiwiZW1haWwiOiJ1c2VyMkBleGFtcGxlLmNvbSIsInBlcm1pc3Npb25zIjpbInJlYWQiLCJ3cml0ZSJdLCJpc3MiOiJjb2xsYWJvcmF0aW9uLXNlcnZlciIsImF1ZCI6ImNvbGxhYm9yYXRpb24tY2xpZW50cyIsImlhdCI6MTc1MTgzNTUwMCwiZXhwIjoxNzUxOTIxOTAwfQ.Kl9l_sRc83nE_5aJ_9vixtfL2CDTX6YsbI3mz0_3llQ'
   },
   {
     username: 'user3',
     userId: 3,
     permissions: ['read', 'write'],
-    token: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjozLCJ1c2VybmFtZSI6InVzZXIzIiwiZW1haWwiOiJ1c2VyM0BleGFtcGxlLmNvbSIsInBlcm1pc3Npb25zIjpbInJlYWQiLCJ3cml0ZSJdLCJpc3MiOiJjb2xsYWJvcmF0aW9uLXNlcnZlciIsImF1ZCI6ImNvbGxhYm9yYXRpb24tY2xpZW50cyIsImlhdCI6MTc1MTgyMTc3NSwiZXhwIjoxNzUxOTA4MTc1fQ._VA09lb5zWK0dsINqFl343IIgXrDNKMsiXqLOIqHwTg'
+    token: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjozLCJ1c2VybmFtZSI6InVzZXIzIiwiZW1haWwiOiJ1c2VyM0BleGFtcGxlLmNvbSIsInBlcm1pc3Npb25zIjpbInJlYWQiLCJ3cml0ZSJdLCJpc3MiOiJjb2xsYWJvcmF0aW9uLXNlcnZlciIsImF1ZCI6ImNvbGxhYm9yYXRpb24tY2xpZW50cyIsImlhdCI6MTc1MTgzNTUwMCwiZXhwIjoxNzUxOTIxOTAwfQ.7SKNcTyF07z3AH-XDxY7gDr46c6KxkXzdkPwZ-FB9Y0'
   }
 ]
