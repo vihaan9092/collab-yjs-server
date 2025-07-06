@@ -23,6 +23,12 @@ This comprehensive performance testing suite analyzes WebSocket load and Redis u
 - **Measures**: Connection success rate, message-to-keystroke ratio, bandwidth usage, **debouncing efficiency**
 - **Status**: **LIVE** - Actively monitoring optimized WebSocket traffic
 
+### 3. 🚀 NEW: Stress Testing Suite (50+ USERS)
+- **Purpose**: High-load performance testing with 50+ concurrent users
+- **Features**: Extreme load simulation, debouncing effectiveness at scale, server stability testing
+- **Measures**: System breaking points, memory usage, connection limits, **debouncing performance under stress**
+- **Status**: **NEW** - Advanced stress testing for production readiness
+
 ### 3. ✅ RedisMonitor (ACTIVE)
 - **Purpose**: Comprehensive Redis performance monitoring
 - **Tracks**: Memory usage, command frequency, connection count, key patterns, **performance under debouncing**
@@ -50,6 +56,12 @@ npm run perf-test:quick
 # Full performance test with comprehensive debouncing metrics
 npm run perf-test
 
+# 🚀 NEW: High-load stress test with 50 users (STRESS TESTING)
+npm run perf-test:stress
+
+# 🚀 NEW: Compare debouncing vs no-debouncing at scale (50 users)
+npm run perf-test:stress-no-debounce
+
 # Test debouncing effectiveness specifically
 npm run perf-test:quick  # Shows debouncing status in results
 ```
@@ -61,6 +73,10 @@ USER_COUNT=20 TEST_DURATION=60000 npm run perf-test
 
 # Test debouncing with different parameters
 USER_COUNT=5 TEST_DURATION=15000 npm run perf-test:quick
+
+# 🚀 NEW: Custom stress testing configurations
+USER_COUNT=75 TEST_DURATION=120000 npm run perf-test:stress
+USER_COUNT=100 TEST_DURATION=180000 KEYSTROKE_INTERVAL=200 npm run perf-test:stress
 
 # Monitor specific server configurations
 SERVER_URL=ws://localhost:3000 REDIS_URL=redis://localhost:6379 npm run perf-test
@@ -74,6 +90,47 @@ docker logs realtime-yjs-server --tail 5
 # Expected output:
 # [document-name] Debouncing enabled: 300ms delay, 1000ms max delay
 ```
+
+## 🚀 NEW: Stress Testing Modes (50+ Users)
+
+### High-Load Performance Testing
+
+The new stress testing modes simulate extreme collaborative scenarios:
+
+#### `npm run perf-test:stress` (50 Users, 90 seconds)
+- **Configuration**: 50 concurrent users, 90-second duration, 300ms keystroke interval
+- **Purpose**: Test system stability and debouncing effectiveness under high load
+- **Expected Results**:
+  - WebSocket messages: ~25,000-30,000 messages
+  - Messages per keystroke: 8-12 (with debouncing)
+  - Redis commands: ~1,500-2,000 commands
+  - Memory usage: Monitor for leaks and excessive consumption
+
+#### `npm run perf-test:stress-no-debounce` (50 Users, No Debouncing)
+- **Configuration**: Same as above but with `DEBOUNCE_ENABLED=false`
+- **Purpose**: Compare performance with and without debouncing at scale
+- **Expected Results**:
+  - WebSocket messages: ~50,000-60,000 messages (2x more than with debouncing)
+  - Messages per keystroke: 20-25 (without debouncing optimization)
+  - Higher server load and bandwidth usage
+  - Demonstrates debouncing effectiveness at scale
+
+### 📈 Stress Test Interpretation Guide
+
+| Metric | Good Performance | Concerning | Action Required |
+|--------|------------------|------------|-----------------|
+| **Connection Success Rate** | >95% | 85-95% | <85% |
+| **Messages per Keystroke** | 8-12 (debounced) | 12-18 | >18 |
+| **Memory Usage** | Stable | Gradual increase | Rapid increase |
+| **Response Time** | <100ms | 100-500ms | >500ms |
+| **Error Rate** | <1% | 1-5% | >5% |
+
+### 🎯 When to Use Stress Testing
+
+- **Before production deployment** with expected high user loads
+- **Performance regression testing** after code changes
+- **Capacity planning** to determine server limits
+- **Debouncing optimization** to find optimal settings for your use case
 
 ## 📊 Test Results (LIVE DATA)
 
@@ -143,6 +200,35 @@ Extend any of the test classes:
 - `WebSocketLoadTester`: Add new user behavior patterns
 - `RedisMonitor`: Add new Redis metrics
 - `KeystrokeAnalyzer`: Add new keystroke handling approaches
+
+### 🚀 Advanced Stress Testing Configurations
+
+```bash
+# Ultra-high load testing (100+ users) - Use with caution
+USER_COUNT=100 TEST_DURATION=120000 npm run perf-test:stress
+
+# Rapid-fire typing simulation (faster keystrokes)
+USER_COUNT=50 KEYSTROKE_INTERVAL=100 npm run perf-test:stress
+
+# Extended endurance testing (5 minutes)
+USER_COUNT=50 TEST_DURATION=300000 npm run perf-test:stress
+
+# Memory leak detection (long duration)
+USER_COUNT=30 TEST_DURATION=600000 npm run perf-test:stress
+
+# Compare different debouncing settings
+DEBOUNCE_DELAY=100 DEBOUNCE_MAX_DELAY=500 npm run perf-test:stress
+DEBOUNCE_DELAY=500 DEBOUNCE_MAX_DELAY=2000 npm run perf-test:stress
+```
+
+### ⚠️ Stress Testing Best Practices
+
+1. **Monitor System Resources**: Watch CPU, memory, and network usage during tests
+2. **Start Small**: Begin with 25-30 users before scaling to 50+
+3. **Clean Environment**: Ensure no other heavy processes are running
+4. **Docker Resources**: Increase Docker memory limits if needed
+5. **Redis Monitoring**: Watch Redis memory usage and connection counts
+6. **Network Bandwidth**: Ensure adequate network capacity for high message volumes
 
 ## 📈 Performance Optimization (IMPLEMENTED & ACTIVE)
 
