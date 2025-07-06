@@ -69,13 +69,12 @@ function waitForWebSocketState(ws, state, timeout = 5000) {
  * Create a mock logger for testing
  */
 function createMockLogger() {
-  const mockFn = () => {};
   return {
-    info: mockFn,
-    error: mockFn,
-    warn: mockFn,
-    debug: mockFn,
-    http: mockFn
+    info: jest.fn(),
+    error: jest.fn(),
+    warn: jest.fn(),
+    debug: jest.fn(),
+    http: jest.fn()
   };
 }
 
