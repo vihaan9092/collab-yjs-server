@@ -14,12 +14,12 @@ class YjsService {
   /**
    * Initialize the YJS service
    */
-  initialize() {
+  async initialize() {
     this.logger.info('YJS Service initializing...');
-    
+
     // Setup periodic cleanup
     this.setupPeriodicCleanup();
-    
+
     this.logger.info('YJS Service initialized successfully');
   }
 
@@ -29,9 +29,9 @@ class YjsService {
   setupPeriodicCleanup() {
     const cleanupInterval = 5 * 60 * 1000; // 5 minutes
     
-    setInterval(() => {
+    setInterval(async () => {
       try {
-        const cleanedCount = this.documentManager.cleanup();
+        const cleanedCount = await this.documentManager.cleanup();
         if (cleanedCount > 0) {
           this.logger.info('Periodic cleanup completed', { cleanedCount });
         }
@@ -135,7 +135,7 @@ class YjsService {
       await new Promise(resolve => setTimeout(resolve, 1000));
 
       // Cleanup resources
-      this.documentManager.destroy();
+      await this.documentManager.destroy();
 
       this.logger.info('YJS Service shutdown completed');
     } catch (error) {

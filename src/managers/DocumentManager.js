@@ -1,10 +1,9 @@
 const IDocumentManager = require('../interfaces/IDocumentManager');
 const { getYDoc, docs, getDocumentStateSize, applyUpdateToDoc } = require('../utils/y-websocket-utils');
+const RedisDocumentSync = require('../services/RedisDocumentSync');
 
 /**
  * Document Manager Implementation for y-websocket
- * Follows Single Responsibility Principle - manages only YJS documents
- * Follows Open/Closed Principle - extensible for different persistence strategies
  * Now works with y-websocket's global document storage
  */
 class DocumentManager extends IDocumentManager {
@@ -15,6 +14,15 @@ class DocumentManager extends IDocumentManager {
     this.documentStats = new Map(); // documentId -> stats object
     this.gcEnabled = config.gcEnabled !== false;
 
+    // Initialize Redis document synchronization
+    this.redisSync = new RedisDocumentSync(logger, {
+      redisUrl: config.redisUrl || process.env.REDIS_URL,
+      keyPrefix: config.redisKeyPrefix || 'collab:'
+    });
+
+    // Track documents with active sync
+    this.syncedDocuments = new Set();
+
     // Setup cleanup interval
     if (config.cleanupInterval) {
       this.cleanupInterval = setInterval(() => {
@@ -23,10 +31,10 @@ class DocumentManager extends IDocumentManager {
     }
   }
 
-  getDocument(documentId) {
+  async getDocument(documentId) {
     try {
       // Use y-websocket's getYDoc function
-      const doc = getYDoc(documentId, this.gcEnabled);
+      const doc = await getYDoc(documentId, this.gcEnabled);
 
       // Initialize stats if not exists
       if (!this.documentStats.has(documentId)) {
@@ -38,6 +46,11 @@ class DocumentManager extends IDocumentManager {
         });
 
         this.logger.info('Document created', { documentId });
+      }
+
+      // Setup Redis sync for new documents
+      if (!this.syncedDocuments.has(documentId)) {
+        await this.setupDocumentSync(documentId, doc);
       }
 
       // Update last accessed time
@@ -54,10 +67,108 @@ class DocumentManager extends IDocumentManager {
   }
 
   hasDocument(documentId) {
-    return this.documents.has(documentId);
+    return docs.has(documentId);
   }
 
-  removeDocument(documentId) {
+  /**
+   * Setup Redis synchronization for a document
+   * @param {string} documentId - Document ID
+   * @param {WSSharedDoc} doc - YJS document instance
+   */
+  async setupDocumentSync(documentId, doc) {
+    try {
+      // Subscribe to Redis updates for this document
+      await this.redisSync.subscribeToDocument(documentId, (update, origin, metadata, syncInfo) => {
+        this.handleRemoteUpdate(documentId, doc, update, origin, metadata, syncInfo);
+      });
+
+      // Listen for local document updates to broadcast
+      doc.on('update', (update, origin) => {
+        // Only broadcast updates that didn't come from Redis sync
+        if (origin !== 'redis-sync') {
+          this.broadcastUpdate(documentId, update, origin);
+        }
+      });
+
+      this.syncedDocuments.add(documentId);
+
+      this.logger.info('Document sync setup completed', {
+        documentId,
+        instanceId: this.redisSync.instanceId
+      });
+
+    } catch (error) {
+      this.logger.error('Failed to setup document sync', error, { documentId });
+      throw error;
+    }
+  }
+
+  /**
+   * Handle remote update from Redis
+   * @param {string} documentId - Document ID
+   * @param {WSSharedDoc} doc - YJS document instance
+   * @param {Uint8Array} update - YJS update
+   * @param {any} origin - Update origin
+   * @param {Object} metadata - Update metadata
+   * @param {Object} syncInfo - Sync information
+   */
+  handleRemoteUpdate(documentId, doc, update, origin, metadata, syncInfo) {
+    try {
+      // Apply the update with special origin to prevent re-broadcasting
+      applyUpdateToDoc(doc, update, 'redis-sync');
+
+      // Update statistics
+      const stats = this.documentStats.get(documentId);
+      if (stats) {
+        stats.updateCount++;
+        stats.lastAccessed = new Date();
+      }
+
+      this.logger.debug('Remote update applied', {
+        documentId,
+        updateSize: update.length,
+        sourceInstance: syncInfo.sourceInstance,
+        messageId: syncInfo.messageId
+      });
+
+    } catch (error) {
+      this.logger.error('Failed to apply remote update', error, {
+        documentId,
+        updateSize: update ? update.length : 0,
+        sourceInstance: syncInfo?.sourceInstance
+      });
+    }
+  }
+
+  /**
+   * Broadcast local update to other instances
+   * @param {string} documentId - Document ID
+   * @param {Uint8Array} update - YJS update
+   * @param {any} origin - Update origin
+   */
+  async broadcastUpdate(documentId, update, origin) {
+    try {
+      await this.redisSync.broadcastUpdate(documentId, update, origin, {
+        timestamp: Date.now(),
+        size: update.length
+      });
+
+      this.logger.debug('Local update broadcasted', {
+        documentId,
+        updateSize: update.length,
+        origin
+      });
+
+    } catch (error) {
+      this.logger.error('Failed to broadcast update', error, {
+        documentId,
+        updateSize: update ? update.length : 0,
+        origin
+      });
+    }
+  }
+
+  async removeDocument(documentId) {
     try {
       const doc = docs.get(documentId);
       if (!doc) {
@@ -68,6 +179,12 @@ class DocumentManager extends IDocumentManager {
       // Only remove if no active connections
       if (doc.conns.size > 0) {
         throw new Error('Cannot remove document with active connections');
+      }
+
+      // Cleanup Redis sync
+      if (this.syncedDocuments.has(documentId)) {
+        await this.redisSync.unsubscribeFromDocument(documentId);
+        this.syncedDocuments.delete(documentId);
       }
 
       // Destroy the document
@@ -110,19 +227,23 @@ class DocumentManager extends IDocumentManager {
     return Array.from(docs.keys());
   }
 
-  cleanup() {
+  async cleanup() {
     try {
       const now = new Date();
       const maxIdleTime = this.config.maxIdleTime || 30 * 60 * 1000; // 30 minutes default
       let cleanedCount = 0;
 
+      const cleanupPromises = [];
       this.documentStats.forEach((stats, documentId) => {
         const idleTime = now - stats.lastAccessed;
         if (idleTime > maxIdleTime && stats.connectionCount === 0) {
-          this.removeDocument(documentId);
+          cleanupPromises.push(this.removeDocument(documentId));
           cleanedCount++;
         }
       });
+
+      // Wait for all cleanup operations to complete
+      await Promise.all(cleanupPromises);
 
       if (cleanedCount > 0) {
         this.logger.info('Document cleanup completed', { cleanedCount });
@@ -135,33 +256,7 @@ class DocumentManager extends IDocumentManager {
     }
   }
 
-  applyUpdate(documentId, update, origin = null) {
-    try {
-      const doc = this.getDocument(documentId);
-      applyUpdateToDoc(doc, update, origin);
 
-      // Update statistics
-      const stats = this.documentStats.get(documentId);
-      if (stats) {
-        stats.updateCount++;
-        stats.lastAccessed = new Date();
-      }
-
-      this.logger.debug('Update applied to document', {
-        documentId,
-        updateSize: update.length,
-        origin
-      });
-
-      return true;
-    } catch (error) {
-      this.logger.error('Failed to apply update to document', error, {
-        documentId,
-        updateSize: update ? update.length : 0
-      });
-      throw error;
-    }
-  }
 
   setupDocumentListeners(doc, documentId) {
     // y-websocket handles document listeners internally
@@ -196,9 +291,15 @@ class DocumentManager extends IDocumentManager {
 
   getOverallStats() {
     try {
+      const totalConnections = Array.from(docs.values())
+        .reduce((sum, doc) => sum + doc.conns.size, 0);
+
       return {
         totalDocuments: docs.size,
+        totalConnections,
         totalStats: this.documentStats.size,
+        syncedDocuments: this.syncedDocuments.size,
+        redisSync: this.redisSync.getMetrics(),
         memoryUsage: process.memoryUsage()
       };
     } catch (error) {
@@ -207,10 +308,15 @@ class DocumentManager extends IDocumentManager {
     }
   }
 
-  destroy() {
+  async destroy() {
     // Clear cleanup interval
     if (this.cleanupInterval) {
       clearInterval(this.cleanupInterval);
+    }
+
+    // Cleanup Redis sync service
+    if (this.redisSync) {
+      await this.redisSync.destroy();
     }
 
     // Destroy all documents from the global docs map
@@ -229,9 +335,12 @@ class DocumentManager extends IDocumentManager {
       docs.clear();
     }
 
-    // Clear local stats
+    // Clear local stats and sync tracking
     if (this.documentStats) {
       this.documentStats.clear();
+    }
+    if (this.syncedDocuments) {
+      this.syncedDocuments.clear();
     }
 
     this.logger.info('DocumentManager destroyed');

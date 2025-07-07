@@ -62,6 +62,17 @@ const docs = new Map();
 // Document creation locks to prevent race conditions
 const documentLocks = new Map();
 
+// DocumentManager instance for Redis sync integration
+let documentManager = null;
+
+/**
+ * Set the DocumentManager instance for Redis sync integration
+ * @param {Object} manager - DocumentManager instance
+ */
+const setDocumentManager = (manager) => {
+  documentManager = manager;
+};
+
 // Ping timeout for connection health check
 const pingTimeout = 30000;
 
@@ -311,6 +322,15 @@ const getYDoc = async (docname, gc = true) => {
       // Store the document
       docs.set(docname, newDoc);
 
+      // Integrate with DocumentManager for Redis sync
+      if (documentManager) {
+        try {
+          await documentManager.getDocument(docname);
+        } catch (error) {
+          console.error('Failed to setup Redis sync for document:', docname, error);
+        }
+      }
+
       return newDoc;
     } finally {
       // Always clean up the lock
@@ -469,9 +489,29 @@ const getDocumentStateSize = (doc) => {
 };
 
 /**
- * Apply update to document
+ * Apply update to YJS document (LOW-LEVEL UTILITY)
+ *
+ * 🔧 PURPOSE: Direct wrapper around YJS's applyUpdate function.
+ * This is the lowest-level function that actually applies binary updates to YJS documents.
+ *
+ * 🔄 CALLED BY:
+ * - handleRemoteUpdate() - When Redis updates arrive (origin: 'redis-sync')
+ * - applyUpdate() - When external API calls are made (origin: varies)
+ * - YJS internal processes - Various origins
+ *
+ * ⚡ PERFORMANCE: This is a direct call to YJS library - very fast, no overhead.
+ *
+ * 🎯 ORIGIN PARAMETER IMPORTANCE:
+ * - 'redis-sync': Prevents re-broadcasting to Redis (avoids infinite loops)
+ * - 'user-input': Triggers Redis broadcasting to other servers
+ * - null/other: Default YJS behavior
+ *
+ * @param {Y.Doc} doc - YJS document instance (must already exist)
+ * @param {Uint8Array} update - YJS update binary data
+ * @param {string|null} origin - Update origin (used for event filtering)
  */
 const applyUpdateToDoc = (doc, update, origin = null) => {
+  // 🔥 DIRECT CALL to YJS library - this is where the actual document update happens
   Y.applyUpdate(doc, update, origin);
 };
 
@@ -481,5 +521,6 @@ module.exports = {
   docs,
   WSSharedDoc,
   getDocumentStateSize,
-  applyUpdateToDoc
+  applyUpdateToDoc,
+  setDocumentManager
 };

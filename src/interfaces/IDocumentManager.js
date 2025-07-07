@@ -53,15 +53,7 @@ class IDocumentManager {
     throw new Error('Method cleanup must be implemented');
   }
 
-  /**
-   * Apply update to document
-   * @param {string} documentId - Document identifier
-   * @param {Uint8Array} update - YJS update
-   * @param {string} origin - Update origin
-   */
-  applyUpdate(documentId, update, origin = null) {
-    throw new Error('Method applyUpdate must be implemented');
-  }
+
 }
 
 module.exports = IDocumentManager;

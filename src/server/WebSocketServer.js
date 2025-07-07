@@ -4,7 +4,7 @@ const WebSocket = require('ws');
 const cors = require('cors');
 const helmet = require('helmet');
 const url = require('url');
-const { setupWSConnection } = require('../utils/y-websocket-utils');
+const { setupWSConnection, setDocumentManager } = require('../utils/y-websocket-utils');
 const { extractDocumentId, parseDocumentMetadata } = require('../utils/DocumentUtils');
 const AuthMiddleware = require('../middleware/AuthMiddleware');
 const AuthConfig = require('../config/AuthConfig');
@@ -62,13 +62,30 @@ class WebSocketServer {
       // API endpoints only - frontend is served separately by Vite/React
 
       // Health check endpoint
-      this.app.get('/health', (req, res) => {
-        res.json({
-          status: 'healthy',
-          timestamp: new Date().toISOString(),
-          uptime: process.uptime(),
-          websocket: this.wss ? 'active' : 'inactive'
-        });
+      this.app.get('/health', async (req, res) => {
+        try {
+          const health = {
+            status: 'healthy',
+            timestamp: new Date().toISOString(),
+            uptime: process.uptime(),
+            websocket: this.wss ? 'active' : 'inactive'
+          };
+
+          // Add Redis sync health if YJS service is available
+          if (this.yjsService && this.yjsService.documentManager && this.yjsService.documentManager.redisSync) {
+            const redisHealth = await this.yjsService.documentManager.redisSync.healthCheck();
+            health.redisSync = redisHealth;
+          }
+
+          res.json(health);
+        } catch (error) {
+          this.logger.error('Health check failed', error);
+          res.status(500).json({
+            status: 'unhealthy',
+            error: error.message,
+            timestamp: new Date().toISOString()
+          });
+        }
       });
 
       // Block old example routes explicitly
@@ -257,7 +274,6 @@ class WebSocketServer {
         this.logger.info('New WebSocket connection', {
           connectionId,
           documentId,
-          documentMetadata,
           origin: req.headers.origin
         });
 
@@ -401,8 +417,6 @@ class WebSocketServer {
             return;
           }
 
-          console.log("Token", token);
-
           // Validate token
           const userInfo = await this.authMiddleware.validateToken(token);
           if (!userInfo) {
@@ -452,6 +466,12 @@ class WebSocketServer {
    */
   setYjsService(yjsService) {
     this.yjsService = yjsService;
+
+    // Set the DocumentManager in y-websocket-utils for Redis sync integration
+    if (yjsService && yjsService.documentManager) {
+      setDocumentManager(yjsService.documentManager);
+      this.logger.info('DocumentManager set in y-websocket-utils for Redis sync');
+    }
   }
 
   /**

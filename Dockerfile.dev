@@ -1,4 +1,4 @@
-# Production Dockerfile with PM2 process management
+# Development Dockerfile with hot reloading support
 FROM node:22.7.0-alpine
 
 # Set working directory in container
@@ -7,22 +7,15 @@ WORKDIR /app
 # Create logs directory
 RUN mkdir -p logs
 
-# Install PM2 globally for production process management
-RUN npm install -g pm2
-
-# Copy package files
+# Copy package files first for better caching
 COPY package*.json ./
 
-# Install only production dependencies
-RUN npm ci --only=production && npm cache clean --force
+# Install ALL dependencies (including devDependencies for development)
+RUN npm ci && npm cache clean --force
 
 # Create non-root user for security
 RUN addgroup -g 1001 -S nodejs && \
     adduser -S nodejs -u 1001
-
-# Copy application code and PM2 config
-COPY src/ ./src/
-COPY ecosystem.config.js ./
 
 # Change ownership of app directory to nodejs user
 RUN chown -R nodejs:nodejs /app
@@ -39,5 +32,5 @@ HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
     if (res.statusCode === 200) process.exit(0); else process.exit(1); \
   }).on('error', () => process.exit(1));"
 
-# Start the application with PM2 in production mode
-CMD ["pm2-runtime", "start", "ecosystem.config.js", "--only", "realtime-yjs-server-prod"]
+# Use nodemon for development hot reloading (only in dev container)
+CMD ["npx", "nodemon", "src/index.js"]
