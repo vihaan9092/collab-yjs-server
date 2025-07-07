@@ -109,7 +109,7 @@ npm run dev
 
 ### Access Points
 
-- **Client Interface**: http://localhost:3000/
+- **Client Interface**: http://localhost:3001/
 - **Health Check**: http://localhost:3000/health
 - **API Statistics**: http://localhost:3000/api/stats
 
@@ -289,10 +289,6 @@ Additional documentation available in the `docs/` directory:
 - **Debouncing Implementation**: Detailed guide on WebSocket debouncing
 - **Performance Testing**: Comprehensive testing documentation
 - **Configuration Examples**: See `.env.example` for all options
-
-## License
-
-MIT License - see LICENSE file for details.
 
 ---
 
