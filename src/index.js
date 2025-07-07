@@ -10,8 +10,6 @@ const YjsService = require('./services/YjsService');
 
 /**
  * Main Application Class
- * Follows Dependency Inversion Principle - orchestrates all components
- * Follows Single Responsibility Principle - handles only application lifecycle
  */
 class RealtimeYjsServer {
   constructor() {
@@ -66,7 +64,7 @@ class RealtimeYjsServer {
       const wss = this.webSocketServer.initializeWebSocket();
 
       // Initialize YJS service
-      this.yjsService.initialize();
+      await this.yjsService.initialize();
 
       this.logger.info('All components initialized successfully');
     } catch (error) {

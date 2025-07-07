@@ -11,11 +11,17 @@
     "test:coverage": "jest --coverage",
     "docker:build": "docker build -t realtime-yjs-server .",
     "docker:run": "docker run -p 3000:3000 realtime-yjs-server",
+    "docker:dev": "docker-compose -f docker-compose.dev.yml up --build",
+    "docker:dev:down": "docker-compose -f docker-compose.dev.yml down",
+    "docker:dev:logs": "docker-compose -f docker-compose.dev.yml logs -f app",
+    "docker:prod": "docker-compose up --build",
+    "docker:prod:down": "docker-compose down",
     "perf-test": "node tests/performance/runPerformanceTest.js",
     "perf-test:quick": "USER_COUNT=10 TEST_DURATION=30000 node tests/performance/runPerformanceTest.js",
     "perf-test:stress": "USER_COUNT=50 TEST_DURATION=90000 KEYSTROKE_INTERVAL=300 node tests/performance/runPerformanceTest.js",
     "perf-test:stress-no-debounce": "USER_COUNT=50 TEST_DURATION=90000 KEYSTROKE_INTERVAL=300 DEBOUNCE_ENABLED=false node tests/performance/runPerformanceTest.js",
-    "test:debounce": "node tests/debounce-test.js"
+    "test:debounce": "node tests/debounce-test.js",
+    "verify:redis-sync": "node scripts/verify-redis-sync.js"
   },
   "keywords": [
     "tiptap",
@@ -59,6 +65,7 @@
     "jsonwebtoken": "^9.0.2",
     "lib0": "^0.2.109",
     "redis": "^5.5.6",
+    "uuid": "^9.0.1",
     "winston": "^3.11.0",
     "ws": "^8.18.3",
     "y-websocket": "^1.5.0",

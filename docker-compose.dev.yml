@@ -1,0 +1,56 @@
+version: '3.8'
+
+services:
+  # Redis service for caching and session management
+  redis:
+    image: redis:7.4-alpine
+    container_name: realtime-yjs-redis-dev
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data_dev:/data
+    command: redis-server --appendonly yes
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+
+  # Main application service for development
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    container_name: realtime-yjs-server-dev
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=development
+      - REDIS_URL=redis://redis:6379
+      - JWT_SECRET=${JWT_SECRET:-your-super-secret-jwt-key-change-in-production}
+      - DJANGO_API_URL=${DJANGO_API_URL:-http://localhost:8000}
+      - AUTH_TEST_MODE=${AUTH_TEST_MODE:-false}
+      - DEBOUNCE_ENABLED=${DEBOUNCE_ENABLED:-true}
+      - DEBOUNCE_DELAY=${DEBOUNCE_DELAY:-300}
+      - DEBOUNCE_MAX_DELAY=${DEBOUNCE_MAX_DELAY:-1000}
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    volumes:
+      # Mount source code for hot reloading
+      - ./src:/app/src:cached
+      - ./package.json:/app/package.json:ro
+      - ./package-lock.json:/app/package-lock.json:ro
+      - ./logs:/app/logs
+      # Exclude node_modules to avoid conflicts
+      - /app/node_modules
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000/health', (res) => { if (res.statusCode === 200) process.exit(0); else process.exit(1); }).on('error', () => process.exit(1));"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+
+volumes:
+  redis_data_dev:
