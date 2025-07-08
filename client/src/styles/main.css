@@ -430,6 +430,8 @@ body {
 .toolbar-btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+  background-color: #f8f9fa;
+  color: #6c757d;
 }
 
 /* Editor Content */
@@ -1050,6 +1052,28 @@ body {
 
 .tiptap-editor:focus {
   outline: none;
+}
+
+/* Read-only mode styles */
+.tiptap-editor.read-only {
+  background-color: #f8f9fa;
+  cursor: default;
+  opacity: 0.8;
+  border: 2px dashed #dee2e6;
+}
+
+.tiptap-editor.read-only::before {
+  content: "🔒 Read-Only Mode";
+  position: absolute;
+  top: 8px;
+  right: 16px;
+  background: #ff6b6b;
+  color: white;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: bold;
+  z-index: 10;
 }
 
 /* Better Typography */

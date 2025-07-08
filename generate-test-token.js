@@ -57,32 +57,33 @@ if (require.main === module) {
         case 'gen':
             const username = args[1] || `testuser${Math.floor(Math.random() * 100)}`;
             const userId = args[2] || Math.floor(Math.random() * 1000) + 1;
-            
+            const permissions = args[3] ? args[3].split(',') : ['read', 'write'];
+
             const token = generateTestToken({
                 username: username,
                 user_id: parseInt(userId),
-                email: `${username}@example.com`
+                email: `${username}@example.com`,
+                permissions: permissions
             });
-            
-            console.log('\n🎫 Generated JWT Token:');
-            console.log('━'.repeat(80));
-            console.log(token);
-            console.log('━'.repeat(80));
-            console.log('\n📋 Token Details:');
-            
+
             const decoded = jwt.decode(token);
-            console.log(`👤 Username: ${decoded.username}`);
-            console.log(`🆔 User ID: ${decoded.user_id}`);
-            console.log(`📧 Email: ${decoded.email}`);
-            console.log(`⏰ Expires: ${new Date(decoded.exp * 1000).toLocaleString()}`);
-            console.log(`🔑 Permissions: ${decoded.permissions.join(', ')}`);
-            
-            console.log('\n🚀 Usage:');
-            console.log('1. Copy the token above');
-            console.log('2. Paste it in the "JWT Token" field in the browser');
-            console.log('3. Click "Connect" to start collaborative editing');
-            console.log('\n💡 Or use URL parameters:');
-            console.log(`http://localhost:3000/?token=${encodeURIComponent(token)}&user=${username}`);
+
+            break;
+
+        case 'readonly':
+        case 'read':
+            const readUsername = args[1] || `reader${Math.floor(Math.random() * 100)}`;
+            const readUserId = args[2] || Math.floor(Math.random() * 1000) + 1;
+
+            const readToken = generateTestToken({
+                username: readUsername,
+                user_id: parseInt(readUserId),
+                email: `${readUsername}@example.com`,
+                permissions: ['read'] // Only read permission
+            });
+
+            const readDecoded = jwt.decode(readToken);
+
             break;
 
         case 'verify':
@@ -105,7 +106,6 @@ if (require.main === module) {
 
         case 'bulk':
             const count = parseInt(args[1]) || 5;
-            console.log(`\n🎫 Generating ${count} test tokens:\n`);
             
             for (let i = 1; i <= count; i++) {
                 const username = `user${i}`;
@@ -115,9 +115,6 @@ if (require.main === module) {
                     email: `${username}@example.com`
                 });
                 
-                console.log(`${i}. ${username}:`);
-                console.log(`   ${token}`);
-                console.log('');
             }
             break;
 
@@ -128,18 +125,27 @@ if (require.main === module) {
             console.log('\n🎫 JWT Token Generator for Collaborative Editor');
             console.log('━'.repeat(50));
             console.log('\nUsage:');
-            console.log('  node generate-test-token.js generate [username] [userId]');
+            console.log('  node generate-test-token.js generate [username] [userId] [permissions]');
+            console.log('  node generate-test-token.js readonly [username] [userId]');
             console.log('  node generate-test-token.js verify <token>');
             console.log('  node generate-test-token.js bulk [count]');
             console.log('  node generate-test-token.js help');
             console.log('\nExamples:');
             console.log('  node generate-test-token.js generate alice 123');
-            console.log('  node generate-test-token.js generate bob');
-            console.log('  node generate-test-token.js generate');
+            console.log('  node generate-test-token.js generate bob 456 read,write');
+            console.log('  node generate-test-token.js generate editor 789 read,write,admin');
+            console.log('  node generate-test-token.js readonly viewer 101');
             console.log('  node generate-test-token.js bulk 3');
             console.log('  node generate-test-token.js verify eyJhbGciOiJIUzI1NiIs...');
             console.log('\nShortcuts:');
             console.log('  gen = generate');
+            console.log('  read = readonly');
+            console.log('\nPermissions:');
+            console.log('  read - Can view documents');
+            console.log('  write - Can edit documents');
+            console.log('  edit - Same as write');
+            console.log('  admin - Full access');
+            console.log('  * - Wildcard (all permissions)');
             console.log('\nEnvironment Variables:');
             console.log('  JWT_SECRET - Secret key for signing tokens (default: "your-super-secret-jwt-key-change-in-production")');
             console.log('  JWT_EXPIRES_IN - Token expiration time (default: "24h")');

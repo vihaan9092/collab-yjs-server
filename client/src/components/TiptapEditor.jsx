@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useEditor, EditorContent } from '@tiptap/react'
+// import { Extension } from '@tiptap/core'
+// import { textInputRule } from '@tiptap/core'
 import StarterKit from '@tiptap/starter-kit'
 import Collaboration from '@tiptap/extension-collaboration'
 import CollaborationCursor from '@tiptap/extension-collaboration-cursor'
@@ -17,8 +19,84 @@ const getUserColor = (username) => {
   return colors[Math.abs(hash) % colors.length]
 }
 
+// // Text Transform Extension - Intercepts and transforms text before CRDT operations
+// const TextTransformExtension = Extension.create({
+//   name: 'textTransform',
+
+//   addInputRules() {
+//     return [
+//       // Auto-correct common typos
+//       textInputRule({
+//         find: /\bteh\s$/,
+//         replace: 'the ',
+//       }),
+
+//       // Convert double dashes to em dash
+//       textInputRule({
+//         find: /--$/,
+//         replace: '—',
+//       }),
+
+//       // Auto-capitalize common words after periods (simple approach)
+//       textInputRule({
+//         find: /\.\s+the$/,
+//         replace: '. The',
+//       }),
+
+//       textInputRule({
+//         find: /\.\s+this$/,
+//         replace: '. This',
+//       }),
+
+//       textInputRule({
+//         find: /\.\s+that$/,
+//         replace: '. That',
+//       }),
+
+//       textInputRule({
+//         find: /\.\s+it$/,
+//         replace: '. It',
+//       }),
+
+//       // Convert (c) to copyright symbol
+//       textInputRule({
+//         find: /\(c\)$/i,
+//         replace: '©',
+//       }),
+
+//       // Convert (tm) to trademark symbol
+//       textInputRule({
+//         find: /\(tm\)$/i,
+//         replace: '™',
+//       }),
+
+//       // Convert fractions
+//       textInputRule({
+//         find: /1\/2$/,
+//         replace: '½',
+//       }),
+
+//       textInputRule({
+//         find: /1\/4$/,
+//         replace: '¼',
+//       }),
+
+//       textInputRule({
+//         find: /3\/4$/,
+//         replace: '¾',
+//       }),
+//     ]
+//   },
+// })
+
 const TiptapEditor = ({ doc, provider, user, isConnected }) => {
   const [isEditorReady, setIsEditorReady] = useState(false)
+
+  // Check if user has write permissions
+  const hasWritePermission = user?.permissions?.includes('write') ||
+                            user?.permissions?.includes('edit') ||
+                            user?.permissions?.includes('*') ||
+                            user?.permissions?.includes('admin')
 
   const editor = useEditor({
     extensions: doc && provider ? [
@@ -36,16 +114,21 @@ const TiptapEditor = ({ doc, provider, user, isConnected }) => {
           color: getUserColor(user?.username || 'Anonymous'),
         },
       }),
+      // // Add text transformation extension
+      // TextTransformExtension,
     ] : [
       // Fallback extensions when doc/provider are not ready
       StarterKit.configure({
         history: false,
       }),
+      // // Add text transformation extension even without collaboration
+      // TextTransformExtension,
     ],
     content: '<p>Welcome to the collaborative editor! Start typing to begin...</p>',
+    editable: hasWritePermission, // Make editor read-only if user doesn't have write permissions
     editorProps: {
       attributes: {
-        class: 'tiptap-editor',
+        class: `tiptap-editor ${!hasWritePermission ? 'read-only' : ''}`,
         spellcheck: 'false',
       },
       handleDOMEvents: {
@@ -118,21 +201,24 @@ const TiptapEditor = ({ doc, provider, user, isConnected }) => {
           <button
             onClick={() => editor?.chain().focus().toggleBold().run()}
             className={`toolbar-btn ${editor?.isActive('bold') ? 'active' : ''}`}
-            disabled={!editor}
+            disabled={!editor || !hasWritePermission}
+            title={!hasWritePermission ? 'Read-only mode' : 'Bold'}
           >
             <strong>B</strong>
           </button>
           <button
             onClick={() => editor?.chain().focus().toggleItalic().run()}
             className={`toolbar-btn ${editor?.isActive('italic') ? 'active' : ''}`}
-            disabled={!editor}
+            disabled={!editor || !hasWritePermission}
+            title={!hasWritePermission ? 'Read-only mode' : 'Italic'}
           >
             <em>I</em>
           </button>
           <button
             onClick={() => editor?.chain().focus().toggleStrike().run()}
             className={`toolbar-btn ${editor?.isActive('strike') ? 'active' : ''}`}
-            disabled={!editor}
+            disabled={!editor || !hasWritePermission}
+            title={!hasWritePermission ? 'Read-only mode' : 'Strikethrough'}
           >
             <s>S</s>
           </button>
@@ -142,21 +228,24 @@ const TiptapEditor = ({ doc, provider, user, isConnected }) => {
           <button
             onClick={() => editor?.chain().focus().toggleHeading({ level: 1 }).run()}
             className={`toolbar-btn ${editor?.isActive('heading', { level: 1 }) ? 'active' : ''}`}
-            disabled={!editor}
+            disabled={!editor || !hasWritePermission}
+            title={!hasWritePermission ? 'Read-only mode' : 'Heading 1'}
           >
             H1
           </button>
           <button
             onClick={() => editor?.chain().focus().toggleHeading({ level: 2 }).run()}
             className={`toolbar-btn ${editor?.isActive('heading', { level: 2 }) ? 'active' : ''}`}
-            disabled={!editor}
+            disabled={!editor || !hasWritePermission}
+            title={!hasWritePermission ? 'Read-only mode' : 'Heading 2'}
           >
             H2
           </button>
           <button
             onClick={() => editor?.chain().focus().setParagraph().run()}
             className={`toolbar-btn ${editor?.isActive('paragraph') ? 'active' : ''}`}
-            disabled={!editor}
+            disabled={!editor || !hasWritePermission}
+            title={!hasWritePermission ? 'Read-only mode' : 'Paragraph'}
           >
             P
           </button>
@@ -166,14 +255,16 @@ const TiptapEditor = ({ doc, provider, user, isConnected }) => {
           <button
             onClick={() => editor?.chain().focus().toggleBulletList().run()}
             className={`toolbar-btn ${editor?.isActive('bulletList') ? 'active' : ''}`}
-            disabled={!editor}
+            disabled={!editor || !hasWritePermission}
+            title={!hasWritePermission ? 'Read-only mode' : 'Bullet List'}
           >
             • List
           </button>
           <button
             onClick={() => editor?.chain().focus().toggleOrderedList().run()}
             className={`toolbar-btn ${editor?.isActive('orderedList') ? 'active' : ''}`}
-            disabled={!editor}
+            disabled={!editor || !hasWritePermission}
+            title={!hasWritePermission ? 'Read-only mode' : 'Numbered List'}
           >
             1. List
           </button>
@@ -183,14 +274,16 @@ const TiptapEditor = ({ doc, provider, user, isConnected }) => {
           <button
             onClick={() => editor?.chain().focus().toggleBlockquote().run()}
             className={`toolbar-btn ${editor?.isActive('blockquote') ? 'active' : ''}`}
-            disabled={!editor}
+            disabled={!editor || !hasWritePermission}
+            title={!hasWritePermission ? 'Read-only mode' : 'Quote'}
           >
             " Quote
           </button>
           <button
             onClick={() => editor?.chain().focus().toggleCodeBlock().run()}
             className={`toolbar-btn ${editor?.isActive('codeBlock') ? 'active' : ''}`}
-            disabled={!editor}
+            disabled={!editor || !hasWritePermission}
+            title={!hasWritePermission ? 'Read-only mode' : 'Code Block'}
           >
             &lt;/&gt; Code
           </button>
@@ -211,6 +304,11 @@ const TiptapEditor = ({ doc, provider, user, isConnected }) => {
         <span className="connection-indicator">
           {isConnected ? '🟢 Connected' : '🔴 Disconnected'}
         </span>
+        {!hasWritePermission && (
+          <span className="permission-indicator" style={{ color: '#ff6b6b', fontWeight: 'bold' }}>
+            🔒 Read-Only Mode
+          </span>
+        )}
       </div>
     </div>
   )

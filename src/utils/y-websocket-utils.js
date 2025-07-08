@@ -357,18 +357,64 @@ const getYDoc = async (docname, gc = true) => {
 
 /**
  * Handle incoming WebSocket messages
+ * Check if user has write permissions
+ * @param {WebSocket} conn - WebSocket connection
+ * @returns {boolean} - Whether user can write to document
+ */
+const hasWritePermission = (conn) => {
+  // Check if connection has user information with permissions
+  if (!conn.user || !conn.user.permissions) {
+    return false;
+  }
+
+  // Check for write permissions
+  const permissions = conn.user.permissions;
+  return permissions.includes('write') ||
+         permissions.includes('edit') ||
+         permissions.includes('*') ||
+         permissions.includes('admin');
+};
+
+/**
+ * Handle incoming WebSocket messages with permission validation
  */
 const messageListener = (conn, doc, message) => {
   try {
     const encoder = encoding.createEncoder();
     const decoder = decoding.createDecoder(message);
     const messageType = decoding.readVarUint(decoder);
-    
+
     switch (messageType) {
       case messageSync:
+        // Check if this is a document update (write operation)
+        const decoderCopy = decoding.createDecoder(message);
+        decoding.readVarUint(decoderCopy); // Skip message type
+
+        // Peek at the sync message type to determine if it's a write operation
+        const syncMessageType = decoding.readVarUint(decoderCopy);
+
+        // Sync message types: 0 = sync step 1 (read), 1 = sync step 2 (read), 2 = update (write)
+        if (syncMessageType === 2) { // This is an update message (write operation)
+          if (!hasWritePermission(conn)) {
+            console.warn('Permission denied: User attempted to write without write permissions', {
+              userId: conn.user?.id,
+              username: conn.user?.username,
+              permissions: conn.user?.permissions,
+              documentId: doc.name
+            });
+
+            // Send error response instead of processing the update
+            const errorEncoder = encoding.createEncoder();
+            encoding.writeVarUint(errorEncoder, messageSync);
+            // Don't process the update, just send back empty response
+            send(doc, conn, encoding.toUint8Array(errorEncoder));
+            return;
+          }
+        }
+
         encoding.writeVarUint(encoder, messageSync);
         syncProtocol.readSyncMessage(decoder, encoder, doc, conn);
-        
+
         // If the encoder only contains the type of reply message and no
         // message, there is no need to send the message. When encoder only
         // contains the type of reply, its length is 1.
@@ -376,8 +422,9 @@ const messageListener = (conn, doc, message) => {
           send(doc, conn, encoding.toUint8Array(encoder));
         }
         break;
-        
+
       case messageAwareness:
+        // Awareness updates (cursor position, user presence) are allowed for all authenticated users
         awarenessProtocol.applyAwarenessUpdate(doc.awareness, decoding.readVarUint8Array(decoder), conn);
         break;
     }
