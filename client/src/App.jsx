@@ -1,8 +1,11 @@
+import { useState } from 'react'
 import { useAuth } from './hooks/useAuth.jsx'
 import AuthSection from './components/AuthSection'
 import EditorSection from './components/EditorSection'
 
 function App() {
+  const [selectedDocument, setSelectedDocument] = useState('')
+
   const {
     isAuthenticated,
     isLoading,
@@ -13,7 +16,8 @@ function App() {
     logout
   } = useAuth()
 
-  const handleLogin = (token) => {
+  const handleLogin = (token, documentName) => {
+    setSelectedDocument(documentName)
     login(token)
   }
 
@@ -60,6 +64,7 @@ function App() {
           <EditorSection
             user={user}
             token={token}
+            documentName={selectedDocument}
             onLogout={logout}
           />
         </main>

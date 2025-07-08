@@ -113,7 +113,7 @@ class KeystrokeAnalyzer extends EventEmitter {
       // Wait for connection
       await this.waitForConnection(user);
       
-      console.log(`✅ Test user created for ${handlingType} keystroke handling`);
+      // Test user created for keystroke handling
       return user;
       
     } catch (error) {
@@ -130,7 +130,7 @@ class KeystrokeAnalyzer extends EventEmitter {
     user.provider.on('status', (event) => {
       if (event.status === 'connected') {
         user.isConnected = true;
-        console.log(`🔗 ${user.type} user connected`);
+        // User connected
 
         // Setup WebSocket monitoring once connected (simplified)
         try {
@@ -156,7 +156,7 @@ class KeystrokeAnalyzer extends EventEmitter {
   setupWebSocketMonitoring(user) {
     // For now, just track basic metrics without detailed WebSocket monitoring
     // The main performance test handles detailed WebSocket analysis
-    console.log(`📊 Basic monitoring enabled for ${user.type} user`);
+    // Basic monitoring enabled
   }
 
   /**
