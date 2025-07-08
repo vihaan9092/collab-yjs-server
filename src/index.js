@@ -45,11 +45,10 @@ class RealtimeYjsServer {
         this.logger
       );
 
-      // Initialize WebSocket server
+      // Initialize WebSocket server with refactored architecture
       this.webSocketServer = new WebSocketServer(this.config, this.logger);
-      this.webSocketServer.initialize();
-      this.webSocketServer.initializeWebSocket();
       this.webSocketServer.setYjsService(this.yjsService);
+      this.webSocketServer.initialize();
 
       // Initialize YJS service
       await this.yjsService.initialize();
@@ -64,14 +63,15 @@ class RealtimeYjsServer {
   /**
    * Start the server
    */
-  async start() {
+  start() {
     try {
-      await this.webSocketServer.start();
-      
-      this.logger.info('Realtime YJS Server is running', {
+      this.webSocketServer.start();
+
+      this.logger.info('🎯 Realtime YJS Server startup complete', {
         port: this.config.get('port'),
         host: this.config.get('host'),
-        nodeEnv: process.env.NODE_ENV || 'development'
+        nodeEnv: process.env.NODE_ENV || 'development',
+        architecture: 'Refactored with Dependency Injection'
       });
 
       // Setup graceful shutdown
@@ -155,7 +155,7 @@ async function main() {
 
   try {
     await server.initialize();
-    await server.start();
+    server.start();
   } catch (error) {
     logger.error('🚨 CRITICAL: Failed to start Realtime YJS Server', error, {
       suggestion: 'Check configuration, dependencies, and port availability'

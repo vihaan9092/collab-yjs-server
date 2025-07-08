@@ -1,3 +1,5 @@
+import { Base64 } from 'js-base64'
+
 /**
  * Secure WebSocket Utility
  * Provides browser-compatible secure authentication for WebSocket connections
@@ -12,43 +14,31 @@ const log = {
   warn: (message, data) => isDevelopment && console.warn(`[SecureWebSocket] ⚠️ ${message}`, data || '')
 }
 
-/**
- * Bulletproof token encoding for WebSocket subprotocol
- * Handles all character encoding edge cases and future-proofs against corruption
- */
 function encodeTokenForWebSocket(token) {
   try {
-    // Step 1: Ensure token is valid UTF-8 string
     if (typeof token !== 'string') {
       throw new Error('Token must be a string')
     }
 
-    // Step 2: Convert to bytes and then to base64
-    const bytes = new TextEncoder().encode(token)
-    const base64 = btoa(String.fromCharCode(...bytes))
+    const encoded = Base64.encode(token, true)
+    console.log(encoded)
 
-    // Step 3: Convert to URL-safe base64
-    const urlSafe = base64
-      .replace(/\+/g, '-')
-      .replace(/\//g, '_')
-      .replace(/=/g, '')
-
-    // Step 4: Validate length (WebSocket subprotocol limits)
-    if (urlSafe.length > 1000) { // Conservative limit
+    if (encoded.length > 1000) {
       throw new Error('Token too long for WebSocket subprotocol')
     }
 
-    // Step 5: Validate only safe characters
-    if (!/^[A-Za-z0-9\-_]*$/.test(urlSafe)) {
+    if (!/^[A-Za-z0-9\-_]*$/.test(encoded)) {
       throw new Error('Token contains invalid characters after encoding')
     }
 
-    return urlSafe
+    return encoded
   } catch (error) {
     log.error('Token encoding failed', error)
     throw new Error('Failed to encode token for WebSocket transmission')
   }
 }
+
+
 
 /**
  * Create a secure WebSocket class that adds JWT authentication via subprotocols
