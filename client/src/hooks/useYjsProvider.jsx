@@ -2,7 +2,12 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import * as Y from 'yjs'
 import { WebsocketProvider } from 'y-websocket'
 import Debug from '../utils/debug'
-import { createSecureProviderConfig, validateTokenFormat, getWebSocketErrorInfo, forceCloseWebSocket } from '../utils/secureWebSocket'
+import {
+  createSecureProviderConfig,
+  validateTokenFormat,
+  getWebSocketErrorInfo,
+  forceCloseWebSocket
+} from '../utils/secureWebSocket'
 
 export const useYjsProvider = (documentId, token, user) => {
   const [provider, setProvider] = useState(null)

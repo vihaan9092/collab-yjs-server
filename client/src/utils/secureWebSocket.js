@@ -13,6 +13,44 @@ const log = {
 }
 
 /**
+ * Bulletproof token encoding for WebSocket subprotocol
+ * Handles all character encoding edge cases and future-proofs against corruption
+ */
+function encodeTokenForWebSocket(token) {
+  try {
+    // Step 1: Ensure token is valid UTF-8 string
+    if (typeof token !== 'string') {
+      throw new Error('Token must be a string')
+    }
+
+    // Step 2: Convert to bytes and then to base64
+    const bytes = new TextEncoder().encode(token)
+    const base64 = btoa(String.fromCharCode(...bytes))
+
+    // Step 3: Convert to URL-safe base64
+    const urlSafe = base64
+      .replace(/\+/g, '-')
+      .replace(/\//g, '_')
+      .replace(/=/g, '')
+
+    // Step 4: Validate length (WebSocket subprotocol limits)
+    if (urlSafe.length > 1000) { // Conservative limit
+      throw new Error('Token too long for WebSocket subprotocol')
+    }
+
+    // Step 5: Validate only safe characters
+    if (!/^[A-Za-z0-9\-_]*$/.test(urlSafe)) {
+      throw new Error('Token contains invalid characters after encoding')
+    }
+
+    return urlSafe
+  } catch (error) {
+    log.error('Token encoding failed', error)
+    throw new Error('Failed to encode token for WebSocket transmission')
+  }
+}
+
+/**
  * Create a secure WebSocket class that adds JWT authentication via subprotocols
  * @param {string} token - JWT token for authentication
  * @returns {class} SecureWebSocket class that extends WebSocket
@@ -30,7 +68,8 @@ export function createSecureWebSocket(token) {
           throw new Error('Invalid WebSocket URL')
         }
 
-        const encodedToken = btoa(token).replace(/[+/=]/g, '_')
+        // 🔧 BULLETPROOF: Future-proof token encoding
+        const encodedToken = encodeTokenForWebSocket(token)
         const authProtocol = `auth.${encodedToken}`
         
         const allProtocols = Array.isArray(protocols) ? [authProtocol, ...protocols] : [authProtocol]
@@ -169,7 +208,7 @@ export function getWebSocketErrorInfo(event) {
  * @param {string} reason - Reason for closing
  */
 export function forceCloseWebSocket(ws, reason = 'User logout') {
-  if (ws && ws.readyState === WebSocket.OPEN) {
+  if (ws && typeof ws.close === 'function' && ws.readyState === 1) { // 1 = WebSocket.OPEN
     log.info(`Force closing WebSocket: ${reason}`)
     ws.close(1000, reason)
   }
