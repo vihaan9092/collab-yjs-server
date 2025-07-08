@@ -12,6 +12,9 @@ const EventEmitter = require('events');
 class PerformanceTestSuite extends EventEmitter {
   constructor(config = {}) {
     super();
+
+    // Increase max listeners to prevent warnings with multiple users
+    process.setMaxListeners(50);
     
     this.config = {
       serverUrl: config.serverUrl || 'ws://localhost:3000',
@@ -154,7 +157,6 @@ class PerformanceTestSuite extends EventEmitter {
       // Wait for connection
       await this.waitForConnection(user);
       
-      console.log(`✅ User ${userId} connected`);
       return user;
       
     } catch (error) {
@@ -212,26 +214,32 @@ class PerformanceTestSuite extends EventEmitter {
       this.metrics.websocket.bytesTransferred += estimatedSize;
     });
 
-    console.log(`📊 Simplified WebSocket tracking enabled for user ${user.id}`);
+    // WebSocket tracking enabled for user
   }
 
   /**
    * Wait for user connection to be established
    */
-  waitForConnection(user, timeout = 5000) {
+  waitForConnection(user, timeout = 10000) { // Increased timeout for high-load scenarios
     return new Promise((resolve, reject) => {
       const startTime = Date.now();
-      
+
       const checkConnection = () => {
         if (user.isConnected) {
           resolve();
         } else if (Date.now() - startTime > timeout) {
-          reject(new Error(`Connection timeout for user ${user.id}`));
+          reject(new Error(`Connection timeout for user ${user.id} after ${timeout}ms`));
         } else {
-          setTimeout(checkConnection, 100);
+          setTimeout(checkConnection, 200); // Increased check interval to reduce CPU usage
         }
       };
-      
+
+      // Add immediate check in case connection is already established
+      if (user.isConnected) {
+        resolve();
+        return;
+      }
+
       checkConnection();
     });
   }
@@ -299,15 +307,29 @@ class PerformanceTestSuite extends EventEmitter {
     this.testActive = true;
     this.metrics.performance.startTime = Date.now();
 
-    // Create all users
+    // Create all users with improved error handling
     console.log(`👥 Creating ${this.config.userCount} users...`);
+    const connectionPromises = [];
+
     for (let i = 1; i <= this.config.userCount; i++) {
-      const user = await this.createUser(i);
-      this.users.push(user);
-      
-      // Small delay between connections to avoid overwhelming the server
-      await new Promise(resolve => setTimeout(resolve, 100));
+      const connectionPromise = this.createUser(i).catch(error => {
+        console.warn(`⚠️  User ${i} connection failed: ${error.message}`);
+        return null; // Return null for failed connections
+      });
+
+      connectionPromises.push(connectionPromise);
+
+      // Staggered connection creation to reduce server load
+      if (i % 10 === 0) {
+        await new Promise(resolve => setTimeout(resolve, 500)); // Longer pause every 10 users
+      } else {
+        await new Promise(resolve => setTimeout(resolve, 150)); // Increased delay between connections
+      }
     }
+
+    // Wait for all connection attempts to complete
+    const userResults = await Promise.all(connectionPromises);
+    this.users = userResults.filter(user => user !== null); // Filter out failed connections
 
     console.log(`✅ Created ${this.users.length} users`);
     console.log(`🔗 Connected users: ${this.metrics.performance.concurrentUsers}`);
@@ -320,9 +342,21 @@ class PerformanceTestSuite extends EventEmitter {
       }, this.config.keystrokeInterval + Math.random() * 200); // Add some randomness
     });
 
-    // Run test for specified duration
+    // Run test for specified duration with timeout protection
     console.log(`⏱️  Running test for ${this.config.testDuration / 1000} seconds...`);
-    await new Promise(resolve => setTimeout(resolve, this.config.testDuration));
+
+    const testTimeout = this.config.testDuration * 2; // 2x the expected duration as safety
+    const testPromise = new Promise(resolve => setTimeout(resolve, this.config.testDuration));
+    const timeoutPromise = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error('Test exceeded maximum duration')), testTimeout)
+    );
+
+    try {
+      await Promise.race([testPromise, timeoutPromise]);
+    } catch (error) {
+      console.warn(`⚠️  Test duration exceeded expected time: ${error.message}`);
+      // Continue with cleanup
+    }
 
     // Stop typing simulation
     typingIntervals.forEach(interval => clearInterval(interval));

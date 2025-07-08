@@ -124,6 +124,7 @@ body {
   font-size: 17px;
 }
 
+.form-group input,
 .form-group textarea {
   width: 100%;
   padding: 16px;
@@ -131,15 +132,26 @@ body {
   border-radius: 12px;
   font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, 'Courier New', monospace;
   font-size: 14px;
-  min-height: 120px;
-  resize: vertical;
   transition: border-color 0.2s ease;
   background: white;
 }
 
+.form-group textarea {
+  min-height: 120px;
+  resize: vertical;
+}
+
+.form-group input:focus,
 .form-group textarea:focus {
   outline: none;
   border-color: #007aff;
+}
+
+.form-group input:disabled,
+.form-group textarea:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  background: #f8f8f8;
 }
 
 .btn {

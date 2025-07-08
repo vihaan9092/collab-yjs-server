@@ -1,10 +1,10 @@
-import { useState } from 'react'
 import { useYjsProvider } from '../hooks/useYjsProvider.jsx'
 import TiptapEditor from './TiptapEditor'
 import ConnectionStatus from './ConnectionStatus'
 
-const EditorSection = ({ user, token, onLogout }) => {
-  const [documentId] = useState('tiptap-demo') // Fixed document ID for now
+const EditorSection = ({ user, token, documentName, onLogout }) => {
+  // Use the document name passed from App.jsx, fallback to default if not provided
+  const documentId = documentName || 'tiptap-demo'
   
   const {
     provider,

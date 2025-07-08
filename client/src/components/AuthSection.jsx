@@ -3,6 +3,7 @@ import { getTestUsers, generateTestToken } from '../utils/jwtUtils'
 
 const AuthSection = ({ onLogin, isLoading, error }) => {
   const [jwtToken, setJwtToken] = useState('')
+  const [documentName, setDocumentName] = useState('')
   const [selectedUser, setSelectedUser] = useState('')
   const [testUsers, setTestUsers] = useState([])
   const [loadingUsers, setLoadingUsers] = useState(true)
@@ -36,7 +37,11 @@ const AuthSection = ({ onLogin, isLoading, error }) => {
       alert('Please enter a JWT token')
       return
     }
-    onLogin(jwtToken.trim())
+    if (!documentName.trim()) {
+      alert('Please enter a document name')
+      return
+    }
+    onLogin(jwtToken.trim(), documentName.trim())
   }
 
   const handleTestUserSelect = async (username) => {
@@ -91,6 +96,18 @@ const AuthSection = ({ onLogin, isLoading, error }) => {
 
         <form onSubmit={handleLogin} className="auth-form">
           <div className="form-group">
+            <label htmlFor="documentName">Document Name:</label>
+            <input
+              id="documentName"
+              type="text"
+              value={documentName}
+              onChange={(e) => setDocumentName(e.target.value)}
+              placeholder="Enter document name (e.g., my-document, project-notes)"
+              disabled={isLoading}
+            />
+          </div>
+
+          <div className="form-group">
             <label htmlFor="jwtToken">JWT Token:</label>
             <textarea
               id="jwtToken"
@@ -102,10 +119,10 @@ const AuthSection = ({ onLogin, isLoading, error }) => {
             />
           </div>
 
-          <button 
-            type="submit" 
+          <button
+            type="submit"
             className="btn btn-primary"
-            disabled={isLoading || !jwtToken.trim()}
+            disabled={isLoading || !jwtToken.trim() || !documentName.trim()}
           >
             {isLoading ? 'Authenticating...' : 'Login'}
           </button>

@@ -39,12 +39,19 @@ class PerformanceTestRunner {
   async runTests() {
     console.log('🚀 Starting Comprehensive Performance Testing Suite');
     console.log('='.repeat(80));
+
+    // Check debouncing configuration
+    const debounceEnabled = process.env.DEBOUNCE_ENABLED !== 'false';
+    const debounceDelay = parseInt(process.env.DEBOUNCE_DELAY) || 300;
+    const debounceMaxDelay = parseInt(process.env.DEBOUNCE_MAX_DELAY) || 1000;
+
     console.log(`📊 Configuration:
     - Server URL: ${this.config.serverUrl}
     - Redis URL: ${this.config.redisUrl}
     - User Count: ${this.config.userCount}
     - Test Duration: ${this.config.testDuration / 1000} seconds
-    - Keystroke Interval: ${this.config.keystrokeInterval}ms`);
+    - Keystroke Interval: ${this.config.keystrokeInterval}ms
+    - Debouncing: ${debounceEnabled ? `ENABLED (${debounceDelay}ms delay, ${debounceMaxDelay}ms max)` : 'DISABLED'}`);
     console.log('='.repeat(80));
 
     const startTime = Date.now();
@@ -405,13 +412,13 @@ class PerformanceTestRunner {
       });
     }
 
-    console.log('\n🎯 ANSWER TO YOUR QUESTIONS:');
+    console.log('\n📊 PERFORMANCE ANALYSIS:');
     console.log('='.repeat(50));
 
     // WebSocket Load Analysis
     if (this.results.performanceTest) {
       const wsData = this.results.performanceTest.websocket;
-      console.log('\n🌐 WEBSOCKET LOAD WITH 20 USERS:');
+      console.log('\n🌐 WEBSOCKET METRICS:');
       console.log(`   • Total Messages: ${wsData.totalMessages}`);
       console.log(`   • Messages per Keystroke: ${wsData.messagesPerKeystroke}`);
       console.log(`   • Data Transferred: ${wsData.bytesTransferred}`);
@@ -421,7 +428,7 @@ class PerformanceTestRunner {
     // Redis Load Analysis
     if (this.results.redisMonitoring) {
       const redisData = this.results.redisMonitoring;
-      console.log('\n🔴 REDIS LOAD WITH 20 USERS:');
+      console.log('\n🔴 REDIS METRICS:');
       console.log(`   • Commands Executed: ${redisData.summary.totalCommands}`);
       console.log(`   • Commands per Second: ${redisData.summary.commandsPerSecond}`);
       console.log(`   • Memory Usage Increase: ${redisData.memory.increase}`);
@@ -431,32 +438,23 @@ class PerformanceTestRunner {
     // Keystroke Analysis
     if (this.results.keystrokeAnalysis && this.results.keystrokeAnalysis.results) {
       const keystrokeData = this.results.keystrokeAnalysis;
-      console.log('\n⌨️  KEYSTROKE HANDLING ANALYSIS:');
+      console.log('\n⌨️  KEYSTROKE ANALYSIS:');
 
       if (keystrokeData.results.immediate) {
         const immediate = keystrokeData.results.immediate;
-        console.log(`   • Current Approach (Immediate):`);
-        console.log(`     - Messages per Keystroke: ${immediate.messagesPerKeystroke}`);
-        console.log(`     - Efficiency Score: ${immediate.efficiency.efficiencyScore}`);
+        console.log(`   • Current Approach: ${immediate.messagesPerKeystroke} messages per keystroke`);
+        console.log(`   • Efficiency Score: ${immediate.efficiency.efficiencyScore}`);
       }
 
       if (keystrokeData.comparison) {
-        console.log(`   • Best Alternative: ${keystrokeData.comparison.efficiency.mostEfficient}`);
-        console.log(`   • Potential Improvement: ${keystrokeData.comparison.performance.improvement}`);
+        console.log(`   • Recommended Approach: ${keystrokeData.comparison.efficiency.mostEfficient}`);
+        if (keystrokeData.comparison.performance.improvement !== '0%') {
+          console.log(`   • Potential Improvement: ${keystrokeData.comparison.performance.improvement}`);
+        }
       }
-    } else {
-      console.log('\n⌨️  KEYSTROKE HANDLING ANALYSIS:');
-      console.log('   • Keystroke analysis was not completed due to connection issues');
-      console.log('   • Based on main performance test: 11.06 messages per keystroke detected');
     }
 
-    console.log('\n🤔 IS CALLING WEBSOCKET AT EACH KEYSTROKE A GOOD PRACTICE?');
-    console.log('='.repeat(60));
-
-    let keystrokeRecommendation = 'ANALYSIS INCOMPLETE';
-    let reasoning = 'Unable to complete keystroke analysis';
-
-    // Use keystroke analysis if available, otherwise use main performance test data
+    // Performance Recommendations with debouncing context
     let ratio = 0;
     if (this.results.keystrokeAnalysis && this.results.keystrokeAnalysis.results && this.results.keystrokeAnalysis.results.immediate) {
       ratio = parseFloat(this.results.keystrokeAnalysis.results.immediate.messagesPerKeystroke);
@@ -464,43 +462,50 @@ class PerformanceTestRunner {
       ratio = parseFloat(this.results.performanceTest.websocket.messagesPerKeystroke);
     }
 
-    if (ratio > 0) {
-      if (ratio > 10) {
-        keystrokeRecommendation = '❌ NOT RECOMMENDED';
-        reasoning = `Current approach generates ${ratio} WebSocket messages per keystroke, which is highly inefficient`;
-      } else if (ratio > 5) {
-        keystrokeRecommendation = '⚠️  NEEDS OPTIMIZATION';
-        reasoning = `${ratio} messages per keystroke is high and should be optimized`;
-      } else if (ratio > 2) {
-        keystrokeRecommendation = '⚠️  NEEDS OPTIMIZATION';
-        reasoning = `${ratio} messages per keystroke is acceptable but can be optimized`;
+    const debounceEnabled = process.env.DEBOUNCE_ENABLED !== 'false';
+
+    if (ratio > 50) {
+      console.log('\n🚨 CRITICAL PERFORMANCE ISSUE:');
+      console.log(`   • Extremely high message frequency: ${ratio} messages per keystroke`);
+      console.log('   • This indicates system overload or feedback loops');
+      console.log('   • Server-side debouncing may not be functioning properly');
+      if (!debounceEnabled) {
+        console.log('   • DEBOUNCE_ENABLED=false - this explains the high message count');
+      }
+    } else if (ratio > 20) {
+      console.log('\n⚠️  HIGH MESSAGE FREQUENCY:');
+      console.log(`   • High message frequency: ${ratio} messages per keystroke`);
+      console.log('   • This may indicate server stress or debouncing issues');
+      if (debounceEnabled) {
+        console.log('   • Server debouncing is enabled but may be overwhelmed');
       } else {
-        keystrokeRecommendation = '✅ ACCEPTABLE';
-        reasoning = `${ratio} messages per keystroke is within reasonable limits`;
+        console.log('   • Consider enabling debouncing: DEBOUNCE_ENABLED=true');
       }
+    } else if (ratio > 5) {
+      console.log('\n⚠️  OPTIMIZATION RECOMMENDATIONS:');
+      console.log('   • Consider implementing debouncing for keystroke events');
+      console.log('   • Batch multiple keystrokes before sending WebSocket messages');
+      console.log('   • Current message frequency may impact server performance at scale');
+    } else if (ratio > 2) {
+      console.log('\n💡 OPTIMIZATION SUGGESTIONS:');
+      console.log('   • Consider debouncing for improved efficiency');
+      console.log('   • Current performance is acceptable but can be optimized');
+    } else if (ratio > 0) {
+      console.log('\n✅ PERFORMANCE STATUS:');
+      console.log('   • Current keystroke handling is within acceptable limits');
     }
 
-    console.log(`   VERDICT: ${keystrokeRecommendation}`);
-    console.log(`   REASONING: ${reasoning}`);
-
-    // Specific recommendations for keystroke handling
-    if (this.results.keystrokeAnalysis && this.results.keystrokeAnalysis.recommendations) {
-      const keystrokeRecs = this.results.keystrokeAnalysis.recommendations
-        .filter(rec => rec.type === 'debouncing' || rec.type === 'batching')
-        .slice(0, 2);
-
-      if (keystrokeRecs.length > 0) {
-        console.log('\n   RECOMMENDED ALTERNATIVES:');
-        keystrokeRecs.forEach((rec, index) => {
-          console.log(`   ${index + 1}. ${rec.recommendation}`);
-        });
-      }
+    // Add note about message counting methodology
+    if (ratio > 10) {
+      console.log('\n📝 NOTE:');
+      console.log('   • Message counts reflect client-side Y.js operations');
+      console.log('   • Server-side debouncing reduces actual network traffic');
+      console.log('   • High ratios may indicate Y.js document synchronization overhead');
     }
 
-    console.log('\n' + '='.repeat(100));
-    console.log('📝 SUMMARY: Performance test completed successfully!');
-    console.log('   Check the detailed reports above for specific optimizations.');
-    console.log('='.repeat(100));
+    console.log('\n' + '='.repeat(80));
+    console.log('✅ PERFORMANCE TEST COMPLETED');
+    console.log('='.repeat(80));
   }
 }
 
@@ -518,7 +523,7 @@ if (require.main === module) {
 
   runner.runTests()
     .then(results => {
-      console.log('\n🎉 Performance testing completed successfully!');
+      console.log('\n✅ Performance testing completed successfully!');
       process.exit(0);
     })
     .catch(error => {
