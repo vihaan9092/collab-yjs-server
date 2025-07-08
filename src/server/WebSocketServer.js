@@ -346,6 +346,9 @@ class WebSocketServer {
           }
         });
 
+        // Attach user information to WebSocket connection for permission checks
+        ws.user = user;
+
         // Use y-websocket connection setup with consistent document ID
         try {
           this.logger.info('Setting up YJS collaborative document connection', {
@@ -355,7 +358,8 @@ class WebSocketServer {
             userId,
             username: user?.username,
             collaborativeFeatures: ['real-time-sync', 'awareness', 'redis-persistence'],
-            service: 'realtime-yjs-server'
+            service: 'realtime-yjs-server',
+            userPermissions: user ? user.permissions : []
           });
 
           this.logger.debug('Calling setupWSConnection', {

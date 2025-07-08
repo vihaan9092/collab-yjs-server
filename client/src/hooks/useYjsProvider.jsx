@@ -96,6 +96,15 @@ export const useYjsProvider = (documentId, token, user) => {
     try {
       // Create new YJS document first
       const newDoc = new Y.Doc()
+
+      // newDoc.on('update', (update, origin) => {
+      //     console.log('📝 [Y.js] Document changed!', {
+      //       updateSize: update.length,
+      //       updateBytes: Array.from(update),
+      //       origin: origin,
+      //       timestamp: new Date().toISOString()
+      //     })
+      //   })
     
       // Set document immediately so components can access it
       docRef.current = newDoc
@@ -119,6 +128,25 @@ export const useYjsProvider = (documentId, token, user) => {
             newDoc,
             secureConfig
           )
+
+          // ADD THIS TO SEE WEBSOCKET MESSAGES:
+          // newProvider.ws.addEventListener('message', (event) => {
+          //   console.log('📡 [WebSocket] Received message:', {
+          //     dataSize: event.data.size || event.data.length,
+          //     timestamp: new Date().toISOString()
+          //   })
+          // })
+
+          // // ADD THIS TO SEE OUTGOING MESSAGES:
+          // const originalSend = newProvider.ws.send.bind(newProvider.ws)
+          // newProvider.ws.send = function(data) {
+          //   console.log('📤 [WebSocket] Sending message:', {
+          //     dataSize: data.length,
+          //     dataBytes: Array.from(new Uint8Array(data)),
+          //     timestamp: new Date().toISOString()
+          //   })
+          //   return originalSend(data)
+          // }
         } catch (error) {
           Debug.error('YJS', 'Failed to create WebSocket provider', error)
           setError(`Failed to create connection: ${error.message}`)
