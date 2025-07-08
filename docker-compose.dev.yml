@@ -34,6 +34,7 @@ services:
       - DEBOUNCE_ENABLED=${DEBOUNCE_ENABLED:-true}
       - DEBOUNCE_DELAY=${DEBOUNCE_DELAY:-300}
       - DEBOUNCE_MAX_DELAY=${DEBOUNCE_MAX_DELAY:-1000}
+      - ENABLE_NODE_DEBUG=${ENABLE_NODE_DEBUG:-0}
     depends_on:
       redis:
         condition: service_healthy
@@ -48,6 +49,36 @@ services:
       - /app/node_modules
     healthcheck:
       test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000/health', (res) => { if (res.statusCode === 200) process.exit(0); else process.exit(1); }).on('error', () => process.exit(1));"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+
+  # React client service for development
+  client:
+    build:
+      context: ./client
+      dockerfile: Dockerfile.dev
+    container_name: realtime-yjs-client-dev
+    ports:
+      - "3001:3001"
+    environment:
+      - NODE_ENV=development
+      - VITE_API_URL=http://app:3000
+      - VITE_WS_URL=ws://app:3000
+    depends_on:
+      - app
+    restart: unless-stopped
+    volumes:
+      # Mount source code for hot reloading
+      - ./client/src:/app/src:cached
+      - ./client/index.html:/app/index.html:cached
+      - ./client/vite.config.js:/app/vite.config.js:ro
+      - ./client/package.json:/app/package.json:ro
+      - ./client/package-lock.json:/app/package-lock.json:ro
+      # Exclude node_modules to avoid conflicts
+      - /app/node_modules
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3001/"]
       interval: 30s
       timeout: 3s
       retries: 3

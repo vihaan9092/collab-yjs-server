@@ -176,9 +176,6 @@ class AuthMiddleware {
                 });
             }
 
-            // Remove 'Bearer ' prefix if present
-            cleanToken = cleanToken.replace(/^Bearer\s+/, '');
-
             // Comprehensive JWT syntax validation
             const jwtValidation = this.validateJWTSyntax(cleanToken);
             if (!jwtValidation.isValid) {
@@ -197,7 +194,6 @@ class AuthMiddleware {
                 hasJwtSecret: !!this.jwtSecret
             });
 
-            // In test mode, bypass JWT verification and create a mock user
             if (this.testMode) {
                 this.logger.info('Test mode enabled - bypassing JWT verification', {
                     service: 'realtime-yjs-server',
@@ -208,8 +204,6 @@ class AuthMiddleware {
                     service: 'realtime-yjs-server',
                     tokenPreview: cleanToken.substring(0, Math.min(20, cleanToken.length)) + '...'
                 });
-
-                console.log("clean token", cleanToken);
 
                 // Try to decode the token without verification to extract user info
                 let userInfo = {};

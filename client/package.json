@@ -9,14 +9,14 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "react": "^18.2.0",
-    "react-dom": "^18.2.0",
-    "@tiptap/react": "^2.1.13",
-    "@tiptap/starter-kit": "^2.1.13",
     "@tiptap/extension-collaboration": "^2.1.13",
     "@tiptap/extension-collaboration-cursor": "^2.1.13",
-    "yjs": "^13.6.8",
-    "y-websocket": "^1.5.0"
+    "@tiptap/react": "^2.1.13",
+    "@tiptap/starter-kit": "^2.1.13",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "y-websocket": "^1.5.0",
+    "yjs": "^13.6.27"
   },
   "devDependencies": {
     "@types/react": "^18.2.43",

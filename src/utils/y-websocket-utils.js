@@ -3,6 +3,10 @@ const encoding = require('lib0/encoding');
 const decoding = require('lib0/decoding');
 const map = require('lib0/map');
 const { getDebounceConfig, logDebounceConfig } = require('../config/debounceConfig');
+const Logger = require('./Logger');
+
+// Initialize logger for y-websocket utilities
+const logger = new Logger({ service: 'y-websocket-utils' });
 
 // Dynamic imports for ES modules
 let syncProtocol, awarenessProtocol;
@@ -242,7 +246,10 @@ class WSSharedDoc extends Y.Doc {
       this.resetDebounceState();
 
     } catch (error) {
-      console.error('Error flushing pending updates:', error);
+      logger.error('Error flushing pending updates', error, {
+        pendingCount: this.debounceState.pendingUpdates.length,
+        docName: doc.name
+      });
       // Fallback: send updates individually
       this.debounceState.pendingUpdates.forEach(item => {
         this.handleImmediateUpdate(item.update, item.origin, doc);
@@ -327,7 +334,10 @@ const getYDoc = async (docname, gc = true) => {
         try {
           await documentManager.getDocument(docname);
         } catch (error) {
-          console.error('Failed to setup Redis sync for document:', docname, error);
+          logger.error('Failed to setup Redis sync for document', error, {
+            documentName: docname,
+            hasDocumentManager: !!documentManager
+          });
         }
       }
 

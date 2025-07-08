@@ -138,17 +138,28 @@ class PerformanceTestSuite extends EventEmitter {
       isConnected: false
     };
 
-    // Create WebSocket connection with authentication token
+    // 🔐 SECURE: Create WebSocket connection with header-based authentication
     const token = this.generateTestToken(user);
-    const wsUrl = `${this.config.serverUrl}/${this.config.documentId}?token=${token}`;
-    
+
     try {
-      // Create WebSocket provider
+      // Custom WebSocket class that adds Authorization header
+      class SecureTestWebSocket extends WebSocket {
+        constructor(url, protocols) {
+          const options = {
+            headers: {
+              'Authorization': `Bearer ${token}`
+            }
+          };
+          super(url, protocols, options);
+        }
+      }
+
+      // Create WebSocket provider with secure authentication
       user.provider = new WebsocketProvider(
         this.config.serverUrl,
         this.config.documentId,
         user.doc,
-        { params: { token } }
+        { WebSocketPolyfill: SecureTestWebSocket }
       );
 
       // Setup event listeners

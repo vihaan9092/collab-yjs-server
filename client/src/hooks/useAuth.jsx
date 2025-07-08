@@ -99,12 +99,16 @@ export const useAuth = () => {
 
   // Logout function
   const logout = useCallback(() => {
+    Debug.auth('User logout initiated - clearing authentication state')
+
+    // Clear authentication state immediately
     localStorage.removeItem(STORAGE_KEY)
     setToken(null)
     setUser(null)
     setIsAuthenticated(false)
     setError(null)
-    Debug.auth('Logout successful');
+
+    Debug.auth('Logout successful - WebSocket connections will be cleaned up');
   }, [])
 
   // Removed contaminated data cleanup - no longer needed

@@ -3,7 +3,6 @@ const http = require('http');
 const WebSocket = require('ws');
 const cors = require('cors');
 const helmet = require('helmet');
-const url = require('url');
 const { setupWSConnection, setDocumentManager } = require('../utils/y-websocket-utils');
 const { extractDocumentId, parseDocumentMetadata } = require('../utils/DocumentUtils');
 const AuthMiddleware = require('../middleware/AuthMiddleware');
@@ -283,17 +282,22 @@ class WebSocketServer {
 
         // Log authenticated user info
         if (user) {
-          this.logger.info('Authenticated user connected', {
+          this.logger.info('🔗 Authenticated user connected to document', {
             connectionId,
             userId: user.id,
             username: user.username,
             email: user.email,
-            documentId
+            documentId,
+            origin: req.headers.origin,
+            userAgent: req.headers['user-agent']?.substring(0, 50) + '...',
+            secureConnection: true,
+            service: 'realtime-yjs-server'
           });
         } else {
-          this.logger.warn('Unauthenticated connection (should not happen)', {
+          this.logger.warn('🚨 Unauthenticated connection (should not happen)', {
             connectionId,
-            documentId
+            documentId,
+            service: 'realtime-yjs-server'
           });
         }
 
@@ -318,11 +322,16 @@ class WebSocketServer {
         }
 
         // Handle connection close
-        ws.on('close', () => {
-          this.logger.info('WebSocket connection closed', {
+        ws.on('close', (code, reason) => {
+          this.logger.info('🔌 WebSocket connection closed', {
             connectionId,
             documentId,
-            userId
+            userId,
+            username: user?.username,
+            closeCode: code,
+            closeReason: reason?.toString() || 'No reason provided',
+            wasSecureConnection: true,
+            service: 'realtime-yjs-server'
           });
 
           // Remove connection from our ConnectionManager
@@ -339,11 +348,14 @@ class WebSocketServer {
 
         // Use y-websocket connection setup with consistent document ID
         try {
-          this.logger.info('Setting up YJS WebSocket connection', {
+          this.logger.info('Setting up YJS collaborative document connection', {
             connectionId,
             documentId,
             originalUrl: req.url,
-            userId
+            userId,
+            username: user?.username,
+            collaborativeFeatures: ['real-time-sync', 'awareness', 'redis-persistence'],
+            service: 'realtime-yjs-server'
           });
 
           this.logger.debug('Calling setupWSConnection', {
@@ -357,10 +369,18 @@ class WebSocketServer {
             gc: true
           });
 
-          this.logger.info('YJS WebSocket connection established successfully', {
+          this.logger.info('YJS collaborative document connection established successfully', {
             connectionId,
             documentId,
-            userId
+            userId,
+            username: user?.username,
+            features: {
+              realTimeSync: true,
+              awarenessSharing: true,
+              redisPersistence: true,
+              secureAuthentication: true
+            },
+            service: 'realtime-yjs-server'
           });
 
           this.logger.debug('WebSocket connection details', {
@@ -382,17 +402,37 @@ class WebSocketServer {
         }
       });
 
-      // Handle HTTP upgrade requests for WebSocket with authentication
       this.server.on('upgrade', async (request, socket, head) => {
         try {
-          // Parse URL and query parameters
-          const parsedUrl = url.parse(request.url, true);
-          const token = parsedUrl.query.token || request.headers.authorization;
+          let token = request.headers.authorization;
+          if (token && token.startsWith('Bearer ')) {
+            token = token.substring(7);
+          }
+
+          if (!token && request.headers['sec-websocket-protocol']) {
+            const protocols = request.headers['sec-websocket-protocol'].split(',').map(p => p.trim());
+            const authProtocol = protocols.find(p => p.startsWith('auth.'));
+            if (authProtocol) {
+              try {
+                // Decode token from subprotocol
+                const encodedToken = authProtocol.substring(5); // Remove "auth." prefix
+                token = atob(encodedToken.replace(/_/g, '+')); // Decode URL-safe base64
+              } catch (error) {
+                this.logger.error('🚨 Failed to decode token from subprotocol', error, {
+                  authProtocol,
+                  service: 'realtime-yjs-server'
+                });
+              }
+            }
+          }
 
           this.logger.debug('WebSocket upgrade request received', {
             url: request.url,
             hasToken: !!token,
             tokenLength: token ? token.length : 0,
+            hasAuthHeader: !!request.headers.authorization,
+            hasSubprotocol: !!request.headers['sec-websocket-protocol'],
+            authMethod: token ? (request.headers.authorization ? 'header' : 'subprotocol') : 'none',
             service: 'realtime-yjs-server'
           });
 
@@ -412,43 +452,54 @@ class WebSocketServer {
 
           if (!token) {
             this.logger.warn(`No token provided in WebSocket connection - URL: ${request.url}`);
-            socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n');
+            socket.write('HTTP/1.1 401 Unauthorized\r\n\r\nAuthentication token required in Authorization header or WebSocket subprotocol');
             socket.destroy();
             return;
           }
 
-          // Validate token
           const userInfo = await this.authMiddleware.validateToken(token);
           if (!userInfo) {
-            socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n');
+            this.logger.warn('WebSocket connection rejected: invalid token', {
+              tokenLength: token.length,
+              service: 'realtime-yjs-server'
+            });
+            socket.write('HTTP/1.1 401 Unauthorized\r\n\r\nInvalid or expired token');
             socket.destroy();
             return;
           }
 
-          // Create user from JWT (no Django dependency)
-          userInfo.token = token.replace(/^Bearer\s+/, '');
+          userInfo.token = token;
           const user = await this.authMiddleware.createUserFromJWT(userInfo);
           if (!user || !user.isActive) {
-            socket.write('HTTP/1.1 403 Forbidden\r\n\r\n');
+            this.logger.warn('WebSocket connection rejected: user not found or inactive', {
+              userId: userInfo.userId,
+              service: 'realtime-yjs-server'
+            });
+            socket.write('HTTP/1.1 403 Forbidden\r\n\r\nUser not found or inactive');
             socket.destroy();
             return;
           }
 
-          // Note: Document access will be checked later when YJS establishes the document connection
-          // The document ID is now passed through the WebsocketProvider protocol, not the URL path
-
-          // Attach user info to request for later use
           request.user = user;
           request.user.token = userInfo.token;
 
-          // Proceed with WebSocket upgrade
+          this.logger.info('WebSocket authentication successful', {
+            userId: user.id,
+            username: user.username,
+            email: user.email,
+            permissions: user.permissions,
+            authMethod: request.headers.authorization ? 'header' : 'subprotocol',
+            documentPath: request.url,
+            service: 'realtime-yjs-server'
+          });
+
           this.wss.handleUpgrade(request, socket, head, (ws) => {
             this.wss.emit('connection', ws, request);
           });
 
         } catch (error) {
           this.logger.error('WebSocket authentication failed', error);
-          socket.write('HTTP/1.1 500 Internal Server Error\r\n\r\n');
+          socket.write('HTTP/1.1 500 Internal Server Error\r\n\r\nAuthentication error');
           socket.destroy();
         }
       });

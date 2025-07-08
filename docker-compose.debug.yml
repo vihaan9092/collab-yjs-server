@@ -1,0 +1,17 @@
+version: '3.8'
+
+services:
+  # Main application service for debugging
+  app:
+    stdin_open: true
+    tty: true
+    environment:
+      - ENABLE_NODE_DEBUG=${ENABLE_NODE_DEBUG:-1}
+    ports:
+      - "9229:9229"  # Node.js debug port
+
+  # Client service for debugging (same as dev but with debug context)
+  client:
+    environment:
+      - VITE_API_URL=http://localhost:3000  # Use localhost for debug mode
+      - VITE_WS_URL=ws://localhost:3000

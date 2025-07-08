@@ -1,0 +1,42 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Attach to Node.js (Docker)",
+            "type": "node",
+            "request": "attach",
+            "port": 9229,
+            "address": "localhost",
+            "localRoot": "${workspaceFolder}/src",
+            "remoteRoot": "/app/src",
+            "protocol": "inspector",
+            "restart": true,
+            "skipFiles": [
+                "<node_internals>/**"
+            ],
+            "console": "integratedTerminal",
+            "internalConsoleOptions": "neverOpen"
+        },
+        {
+            "name": "Debug Node.js (Local)",
+            "type": "node",
+            "request": "launch",
+            "program": "${workspaceFolder}/src/index.js",
+            "env": {
+                "NODE_ENV": "development",
+                "REDIS_URL": "redis://localhost:6379",
+                "JWT_SECRET": "your-super-secret-jwt-key-change-in-production",
+                "DJANGO_API_URL": "http://localhost:8000",
+                "AUTH_TEST_MODE": "false",
+                "DEBOUNCE_ENABLED": "true",
+                "DEBOUNCE_DELAY": "300",
+                "DEBOUNCE_MAX_DELAY": "1000"
+            },
+            "console": "integratedTerminal",
+            "internalConsoleOptions": "neverOpen",
+            "skipFiles": [
+                "<node_internals>/**"
+            ]
+        }
+    ]
+}

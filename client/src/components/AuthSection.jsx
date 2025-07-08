@@ -15,7 +15,6 @@ const AuthSection = ({ onLogin, isLoading, error }) => {
         const users = await getTestUsers()
         setTestUsers(users)
       } catch (error) {
-        console.error('Failed to generate test users:', error)
         // Fallback to basic user data without tokens
         setTestUsers([
           { username: 'user1', userId: 1, permissions: ['read', 'write'], token: '' },
@@ -58,7 +57,6 @@ const AuthSection = ({ onLogin, isLoading, error }) => {
           setJwtToken(token)
           setSelectedUser(username)
         } catch (error) {
-          console.error('Failed to generate token:', error)
           alert('Failed to generate token for this user')
         }
       }
@@ -76,7 +74,6 @@ const AuthSection = ({ onLogin, isLoading, error }) => {
         const token = await generateTestToken(user.username, user.userId, user.permissions)
         setJwtToken(token)
       } catch (error) {
-        console.error('Failed to generate token:', error)
         alert('Failed to generate token')
       }
     }

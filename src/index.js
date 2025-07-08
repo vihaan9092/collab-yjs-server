@@ -147,14 +147,19 @@ class RealtimeYjsServer {
  * Main execution
  */
 async function main() {
+  // Initialize logger for startup
+  const Logger = require('./utils/Logger');
+  const logger = new Logger({ service: 'startup' });
+
   const server = new RealtimeYjsServer();
-  
+
   try {
     await server.initialize();
     await server.start();
   } catch (error) {
-    // Use basic console.error for startup failures since logger might not be initialized
-    console.error('Failed to start Realtime YJS Server:', error);
+    logger.error('🚨 CRITICAL: Failed to start Realtime YJS Server', error, {
+      suggestion: 'Check configuration, dependencies, and port availability'
+    });
     process.exit(1);
   }
 }

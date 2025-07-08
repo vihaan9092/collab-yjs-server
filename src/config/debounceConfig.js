@@ -24,12 +24,10 @@ const getDebounceConfig = () => {
 
   // Validation
   if (config.delay < config.minDelay) {
-    console.warn(`DEBOUNCE_DELAY (${config.delay}ms) is less than minimum (${config.minDelay}ms). Using minimum.`);
     config.delay = config.minDelay;
   }
 
   if (config.maxDelay < config.delay) {
-    console.warn(`DEBOUNCE_MAX_DELAY (${config.maxDelay}ms) is less than DEBOUNCE_DELAY (${config.delay}ms). Using delay * 3.`);
     config.maxDelay = config.delay * 3;
   }
 
@@ -41,9 +39,13 @@ const getDebounceConfig = () => {
 /**
  * Log debouncing configuration for debugging
  * @param {Object} config - Configuration to log
- * @param {Object} logger - Logger instance (optional)
+ * @param {Object} logger - Logger instance (required)
  */
-const logDebounceConfig = (config, logger = console) => {
+const logDebounceConfig = (config, logger) => {
+  if (!logger) {
+    // Fallback to console only if no logger provided (should not happen in production)
+    logger = console;
+  }
   const status = config.enabled ? 'ENABLED' : 'DISABLED';
   
   logger.info('Debouncing Configuration:', {
