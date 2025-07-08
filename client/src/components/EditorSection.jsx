@@ -1,4 +1,5 @@
 import { useYjsProvider } from '../hooks/useYjsProvider.jsx'
+import { HiUser, HiArrowRightOnRectangle } from 'react-icons/hi2'
 import TiptapEditor from './TiptapEditor'
 import ConnectionStatus from './ConnectionStatus'
 
@@ -24,13 +25,14 @@ const EditorSection = ({ user, token, documentName, onLogout }) => {
         </div>
         <div className="header-right">
           <div className="user-info">
-            <span className="user-icon">👤</span>
-            <span className="user-name">{user.username}</span>
+            <HiUser className="user-icon" />
+            <span className="user-name">{user.username}{user.id ? ` (ID: ${user.id})` : ''}</span>
           </div>
           <button
             className="btn btn-secondary btn-small"
             onClick={onLogout}
           >
+            <HiArrowRightOnRectangle className="logout-icon" />
             Logout
           </button>
         </div>

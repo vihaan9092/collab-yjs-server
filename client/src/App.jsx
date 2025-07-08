@@ -40,11 +40,7 @@ function App() {
     return (
       <div className="app">
         <div className="container">
-          <header className="header">
-            <h1>Collaborative Editor</h1>
-            <p>Real-time document editing</p>
-          </header>
-
+    
           <main className="main">
             <AuthSection
               onLogin={handleLogin}

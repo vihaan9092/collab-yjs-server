@@ -25,7 +25,7 @@ help: ## Show this help message
 	@echo "$(BLUE)Realtime YJS Server - Docker Management$(NC)"
 	@echo ""
 	@echo "$(GREEN)Development Commands (Default - with hot reloading):$(NC)"
-	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z_-]+:.*?## / {printf "  $(YELLOW)%-20s$(NC) %s\n", $$1, $$2}' $(MAKEFILE_LIST) | grep -E "(build|run|run-detached|logs|stop|shell|shell-client|health|clean)"
+	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z_-]+:.*?## / {printf "  $(YELLOW)%-20s$(NC) %s\n", $$1, $$2}' $(MAKEFILE_LIST) | grep -E "(build|build-fresh|fresh|run|run-detached|logs|stop|shell|shell-client|health|clean|reset-deps)"
 	@echo ""
 	@echo "$(GREEN)Debug Commands:$(NC)"
 	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z_-]+:.*?## / {printf "  $(YELLOW)%-20s$(NC) %s\n", $$1, $$2}' $(MAKEFILE_LIST) | grep -E "vscodedebug"
@@ -46,6 +46,27 @@ build: ## Build the development Docker services with hot reloading
 	@echo "  - Backend API: http://localhost:3000"
 	@echo "  - React Client: http://localhost:3001"
 	@echo "  - Redis: localhost:6379"
+
+# Fresh build with automatic node_modules cleanup (for package updates)
+.PHONY: build-fresh
+build-fresh: ## Fresh build: auto-removes frontend & backend node_modules, builds with no cache
+	@echo "$(BLUE)[BUILD-FRESH]$(NC) Starting fresh build process..."
+	@echo "$(YELLOW)[STEP 1/4]$(NC) Stopping services..."
+	$(DEV_COMPOSE) down
+	@echo "$(YELLOW)[STEP 2/4]$(NC) Removing node_modules volumes (frontend & backend)..."
+	-docker volume rm realtime_yjs_server_client_node_modules 2>/dev/null || true
+	-docker volume rm realtime_yjs_server_server_node_modules 2>/dev/null || true
+	@echo "$(YELLOW)[STEP 3/4]$(NC) Building services with no cache..."
+	$(DEV_COMPOSE) build --no-cache
+	@echo "$(YELLOW)[STEP 4/4]$(NC) Fresh build completed!"
+	@echo "$(GREEN)[SUCCESS]$(NC) Fresh build completed successfully"
+	@echo "$(BLUE)[INFO]$(NC) All node_modules volumes recreated, packages will be reinstalled"
+	@echo "$(BLUE)[NEXT]$(NC) Run 'make run' to start the services"
+
+# Fresh build and run (one command for convenience)
+.PHONY: fresh
+fresh: build-fresh run ## Fresh build and run: auto-cleanup + build + start services
+	@echo "$(GREEN)[FRESH]$(NC) Fresh build and run completed!"
 
 # Run the Docker services with real-time logs using Docker Compose (Development)
 .PHONY: run
@@ -128,6 +149,17 @@ clean: ## Clean Docker cache and unused resources (both dev and prod)
 	docker system prune -f
 	docker builder prune -f
 	@echo "$(GREEN)[SUCCESS]$(NC) Docker cache cleaned"
+
+# Reset node_modules volumes (use after package changes)
+.PHONY: reset-deps
+reset-deps: ## Reset frontend & backend node_modules volumes
+	@echo "$(BLUE)[RESET-DEPS]$(NC) Resetting node_modules volumes (frontend & backend)"
+	@echo "$(YELLOW)[WARNING]$(NC) This will remove all installed packages in containers"
+	$(DEV_COMPOSE) down
+	-docker volume rm realtime_yjs_server_client_node_modules 2>/dev/null || true
+	-docker volume rm realtime_yjs_server_server_node_modules 2>/dev/null || true
+	@echo "$(GREEN)[SUCCESS]$(NC) All node_modules volumes reset"
+	@echo "$(BLUE)[INFO]$(NC) Run 'make build && make run' to reinstall packages"
 
 # Nuclear option - remove everything related to this project
 .PHONY: armageddon
