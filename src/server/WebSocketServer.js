@@ -414,9 +414,9 @@ class WebSocketServer {
             const authProtocol = protocols.find(p => p.startsWith('auth.'));
             if (authProtocol) {
               try {
-                // Decode token from subprotocol
+                // Decode token from subprotocol with bulletproof decoding
                 const encodedToken = authProtocol.substring(5); // Remove "auth." prefix
-                token = atob(encodedToken.replace(/_/g, '+')); // Decode URL-safe base64
+                token = this.decodeTokenFromWebSocket(encodedToken);
               } catch (error) {
                 this.logger.error('🚨 Failed to decode token from subprotocol', error, {
                   authProtocol,
@@ -574,6 +574,54 @@ class WebSocketServer {
     } catch (error) {
       this.logger.error('Failed to stop server', error);
       throw error;
+    }
+  }
+
+  decodeTokenFromWebSocket(encodedToken) {
+    try {
+      // Step 1: Validate input
+      if (!encodedToken || typeof encodedToken !== 'string') {
+        throw new Error('Invalid encoded token');
+      }
+
+      // Step 2: Validate only contains safe characters
+      if (!/^[A-Za-z0-9\-_]*$/.test(encodedToken)) {
+        throw new Error('Token contains invalid characters');
+      }
+
+      // Step 3: Convert URL-safe base64 to standard base64
+      let standardBase64 = encodedToken
+        .replace(/-/g, '+')
+        .replace(/_/g, '/');
+
+      // Step 4: Add proper padding
+      const padding = standardBase64.length % 4;
+      if (padding) {
+        standardBase64 += '='.repeat(4 - padding);
+      }
+
+      // Step 5: Decode base64 to bytes (bulletproof method)
+      const binaryString = atob(standardBase64);
+      const bytes = new Uint8Array(binaryString.length);
+      for (let i = 0; i < binaryString.length; i++) {
+        bytes[i] = binaryString.charCodeAt(i);
+      }
+
+      // Step 6: Convert bytes to UTF-8 string (handles all Unicode)
+      const token = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+
+      // Step 7: Basic JWT format validation
+      if (!/^[A-Za-z0-9\-_]+\.[A-Za-z0-9\-_]+\.[A-Za-z0-9\-_]+$/.test(token)) {
+        throw new Error('Decoded token is not valid JWT format');
+      }
+
+      return token;
+    } catch (error) {
+      this.logger.error('Token decoding failed', error, {
+        encodedTokenLength: encodedToken?.length || 0,
+        service: 'realtime-yjs-server'
+      });
+      throw new Error('Failed to decode token from WebSocket transmission');
     }
   }
 
