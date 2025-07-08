@@ -14,30 +14,24 @@ const log = {
   warn: (message, data) => isDevelopment && console.warn(`[SecureWebSocket] ⚠️ ${message}`, data || '')
 }
 
-function encodeTokenForWebSocket(token) {
+function encodeTokenForWebSocket(token, logger = console) {
   try {
-    if (typeof token !== 'string') {
-      throw new Error('Token must be a string')
+    if (typeof token !== 'string' || token.length < 10) {
+      throw new Error('Token must be a valid string');
     }
 
-    const encoded = Base64.encode(token, true)
-    console.log(encoded)
+    const encoded = Base64.encode(token, true); // base64url-safe
 
     if (encoded.length > 1000) {
-      throw new Error('Token too long for WebSocket subprotocol')
+      throw new Error('Token too long for WebSocket');
     }
 
-    if (!/^[A-Za-z0-9\-_]*$/.test(encoded)) {
-      throw new Error('Token contains invalid characters after encoding')
-    }
-
-    return encoded
+    return encoded;
   } catch (error) {
-    log.error('Token encoding failed', error)
-    throw new Error('Failed to encode token for WebSocket transmission')
+    logger.error?.('Token encoding failed:', error.message);
+    throw new Error('Failed to encode token for WebSocket');
   }
 }
-
 
 
 /**
