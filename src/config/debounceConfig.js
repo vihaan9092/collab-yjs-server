@@ -36,92 +36,7 @@ const getDebounceConfig = () => {
   return config;
 };
 
-/**
- * Validate debouncing configuration
- * @param {Object} config - Configuration to validate
- * @returns {boolean} True if valid
- */
-const validateDebounceConfig = (config) => {
-  if (!config || typeof config !== 'object') {
-    return false;
-  }
 
-  const requiredFields = ['enabled', 'delay', 'maxDelay', 'minDelay'];
-  for (const field of requiredFields) {
-    if (!(field in config)) {
-      return false;
-    }
-  }
-
-  if (typeof config.enabled !== 'boolean') {
-    return false;
-  }
-
-  if (!Number.isInteger(config.delay) || config.delay < 0) {
-    return false;
-  }
-
-  if (!Number.isInteger(config.maxDelay) || config.maxDelay < 0) {
-    return false;
-  }
-
-  if (!Number.isInteger(config.minDelay) || config.minDelay < 0) {
-    return false;
-  }
-
-  return true;
-};
-
-/**
- * Get recommended debouncing settings based on use case
- * @param {string} useCase - Use case ('typing', 'drawing', 'bulk-edit', 'real-time')
- * @returns {Object} Recommended configuration
- */
-const getRecommendedConfig = (useCase = 'typing') => {
-  const configs = {
-    // For text editing (default)
-    typing: {
-      enabled: true,
-      delay: 300,
-      maxDelay: 1000,
-      minDelay: 50,
-    },
-    
-    // For drawing/graphics applications
-    drawing: {
-      enabled: true,
-      delay: 100,
-      maxDelay: 500,
-      minDelay: 25,
-    },
-    
-    // For bulk editing operations
-    'bulk-edit': {
-      enabled: true,
-      delay: 500,
-      maxDelay: 2000,
-      minDelay: 100,
-    },
-    
-    // For real-time applications requiring immediate updates
-    'real-time': {
-      enabled: false,
-      delay: 0,
-      maxDelay: 0,
-      minDelay: 0,
-    },
-    
-    // For high-performance scenarios
-    performance: {
-      enabled: true,
-      delay: 200,
-      maxDelay: 800,
-      minDelay: 50,
-    }
-  };
-
-  return configs[useCase] || configs.typing;
-};
 
 /**
  * Log debouncing configuration for debugging
@@ -151,47 +66,9 @@ const logDebounceConfig = (config, logger = console) => {
   }
 };
 
-/**
- * Calculate expected performance improvement
- * @param {Object} config - Debouncing configuration
- * @param {number} keystrokesPerSecond - Expected keystrokes per second
- * @returns {Object} Performance metrics
- */
-const calculatePerformanceImprovement = (config, keystrokesPerSecond = 5) => {
-  if (!config.enabled) {
-    return {
-      messageReduction: 0,
-      bandwidthSaving: 0,
-      description: 'Debouncing disabled - no performance improvement'
-    };
-  }
 
-  // Estimate message reduction based on debounce delay
-  const messagesPerSecondWithoutDebounce = keystrokesPerSecond * 2; // Assume 2 messages per keystroke
-  const messagesPerSecondWithDebounce = Math.max(1, 1000 / config.delay);
-  
-  const messageReduction = Math.max(0, 
-    ((messagesPerSecondWithoutDebounce - messagesPerSecondWithDebounce) / messagesPerSecondWithoutDebounce) * 100
-  );
-
-  // Estimate bandwidth saving (assuming average message size of 100 bytes)
-  const avgMessageSize = 100;
-  const bandwidthSavingBytes = (messagesPerSecondWithoutDebounce - messagesPerSecondWithDebounce) * avgMessageSize;
-  const bandwidthSavingKB = bandwidthSavingBytes / 1024;
-
-  return {
-    messageReduction: Math.round(messageReduction),
-    bandwidthSaving: Math.round(bandwidthSavingKB * 100) / 100,
-    messagesPerSecondBefore: messagesPerSecondWithoutDebounce,
-    messagesPerSecondAfter: messagesPerSecondWithDebounce,
-    description: `${Math.round(messageReduction)}% fewer messages, ${Math.round(bandwidthSavingKB * 100) / 100}KB/s bandwidth saved`
-  };
-};
 
 module.exports = {
   getDebounceConfig,
-  validateDebounceConfig,
-  getRecommendedConfig,
-  logDebounceConfig,
-  calculatePerformanceImprovement
+  logDebounceConfig
 };

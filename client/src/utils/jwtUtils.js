@@ -1,9 +1,53 @@
-// JWT utility functions for the client
+// JWT Configuration - should match backend AuthConfig
+const JWT_CONFIG = {
+  secret: 'your-super-secret-jwt-key-change-in-production', // Should match backend JWT_SECRET
+  expiresIn: 24 * 60 * 60, // 24 hours in seconds
+  algorithm: 'HS256',
+  issuer: 'collaboration-server',
+  audience: 'collaboration-clients'
+}
 
-export const generateTestToken = (username, userId, permissions = ['read', 'write']) => {
-  // This mimics the server's JWT generation for testing
+// Browser-compatible HMAC-SHA256 implementation
+async function hmacSha256(key, data) {
+  const encoder = new TextEncoder()
+  const keyData = encoder.encode(key)
+  const messageData = encoder.encode(data)
+
+  const cryptoKey = await crypto.subtle.importKey(
+    'raw',
+    keyData,
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign']
+  )
+
+  const signature = await crypto.subtle.sign('HMAC', cryptoKey, messageData)
+  return new Uint8Array(signature)
+}
+
+// Base64URL encoding (JWT standard)
+function base64UrlEncode(data) {
+  if (data instanceof Uint8Array) {
+    // Convert Uint8Array to base64
+    const binary = String.fromCharCode(...data)
+    return btoa(binary)
+      .replace(/\+/g, '-')
+      .replace(/\//g, '_')
+      .replace(/=/g, '')
+  } else {
+    // Convert string to base64
+    return btoa(JSON.stringify(data))
+      .replace(/\+/g, '-')
+      .replace(/\//g, '_')
+      .replace(/=/g, '')
+  }
+}
+
+export const generateTestToken = async (username, userId, permissions = ['read', 'write']) => {
+  const now = Math.floor(Date.now() / 1000)
+
   const header = {
-    alg: 'HS256',
+    alg: JWT_CONFIG.algorithm,
     typ: 'JWT'
   }
 
@@ -12,21 +56,22 @@ export const generateTestToken = (username, userId, permissions = ['read', 'writ
     username: username,
     email: `${username}@example.com`,
     permissions: permissions,
-    iss: 'collaboration-server',
-    aud: 'collaboration-clients',
-    iat: Math.floor(Date.now() / 1000),
-    exp: Math.floor(Date.now() / 1000) + (24 * 60 * 60) // 24 hours
+    iss: JWT_CONFIG.issuer,
+    aud: JWT_CONFIG.audience,
+    iat: now,
+    exp: now + JWT_CONFIG.expiresIn
   }
 
-  // Note: This is for demo purposes only
-  // In production, tokens should only be generated server-side
-  const encodedHeader = btoa(JSON.stringify(header))
-  const encodedPayload = btoa(JSON.stringify(payload))
-  
-  // Mock signature (in real app, this would be generated server-side with secret)
-  const mockSignature = btoa(`mock-signature-${username}-${Date.now()}`)
-  
-  return `${encodedHeader}.${encodedPayload}.${mockSignature}`
+  // Create the token parts
+  const encodedHeader = base64UrlEncode(header)
+  const encodedPayload = base64UrlEncode(payload)
+  const data = `${encodedHeader}.${encodedPayload}`
+
+  // Generate HMAC signature
+  const signature = await hmacSha256(JWT_CONFIG.secret, data)
+  const encodedSignature = base64UrlEncode(signature)
+
+  return `${data}.${encodedSignature}`
 }
 
 export const decodeToken = (token) => {
@@ -71,24 +116,81 @@ export const getTokenUser = (token) => {
   }
 }
 
-// Predefined test users with real server-generated tokens
-export const TEST_USERS = [
-  {
-    username: 'user1',
-    userId: 1,
-    permissions: ['read', 'write'],
-    token: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoxLCJ1c2VybmFtZSI6InVzZXIxIiwiZW1haWwiOiJ1c2VyMUBleGFtcGxlLmNvbSIsInBlcm1pc3Npb25zIjpbInJlYWQiLCJ3cml0ZSJdLCJpc3MiOiJjb2xsYWJvcmF0aW9uLXNlcnZlciIsImF1ZCI6ImNvbGxhYm9yYXRpb24tY2xpZW50cyIsImlhdCI6MTc1MTgzNTUwMCwiZXhwIjoxNzUxOTIxOTAwfQ.d-YWi9KMgCN92x2O0TF07GfMwTslLrZ_8fm90jejgbo'
-  },
-  {
-    username: 'user2',
-    userId: 2,
-    permissions: ['read', 'write'],
-    token: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoyLCJ1c2VybmFtZSI6InVzZXIyIiwiZW1haWwiOiJ1c2VyMkBleGFtcGxlLmNvbSIsInBlcm1pc3Npb25zIjpbInJlYWQiLCJ3cml0ZSJdLCJpc3MiOiJjb2xsYWJvcmF0aW9uLXNlcnZlciIsImF1ZCI6ImNvbGxhYm9yYXRpb24tY2xpZW50cyIsImlhdCI6MTc1MTgzNTUwMCwiZXhwIjoxNzUxOTIxOTAwfQ.Kl9l_sRc83nE_5aJ_9vixtfL2CDTX6YsbI3mz0_3llQ'
-  },
-  {
-    username: 'user3',
-    userId: 3,
-    permissions: ['read', 'write'],
-    token: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjozLCJ1c2VybmFtZSI6InVzZXIzIiwiZW1haWwiOiJ1c2VyM0BleGFtcGxlLmNvbSIsInBlcm1pc3Npb25zIjpbInJlYWQiLCJ3cml0ZSJdLCJpc3MiOiJjb2xsYWJvcmF0aW9uLXNlcnZlciIsImF1ZCI6ImNvbGxhYm9yYXRpb24tY2xpZW50cyIsImlhdCI6MTc1MTgzNTUwMCwiZXhwIjoxNzUxOTIxOTAwfQ.7SKNcTyF07z3AH-XDxY7gDr46c6KxkXzdkPwZ-FB9Y0'
+// Validate token format and basic structure
+export const validateTokenFormat = (token) => {
+  try {
+    if (!token || typeof token !== 'string') {
+      return { valid: false, error: 'Token must be a string' }
+    }
+
+    const parts = token.split('.')
+    if (parts.length !== 3) {
+      return { valid: false, error: 'Token must have 3 parts separated by dots' }
+    }
+
+    // Try to decode header and payload
+    const decoded = decodeToken(token)
+
+    // Check required fields
+    const payload = decoded.payload
+    if (!payload.user_id && !payload.sub) {
+      return { valid: false, error: 'Token missing user ID' }
+    }
+
+    if (!payload.username) {
+      return { valid: false, error: 'Token missing username' }
+    }
+
+    if (decoded.isExpired) {
+      return { valid: false, error: 'Token is expired' }
+    }
+
+    return {
+      valid: true,
+      payload: payload,
+      expiresAt: new Date(payload.exp * 1000)
+    }
+  } catch (error) {
+    return { valid: false, error: `Token validation failed: ${error.message}` }
   }
+}
+
+// Generate test users with dynamically created tokens
+const generateTestUsers = async () => {
+  const users = [
+    { username: 'user1', userId: 1, permissions: ['read', 'write'] },
+    { username: 'user2', userId: 2, permissions: ['read', 'write'] },
+    { username: 'user3', userId: 3, permissions: ['read', 'write'] },
+    { username: 'admin', userId: 4, permissions: ['read', 'write', 'admin'] },
+    { username: 'viewer', userId: 5, permissions: ['read'] }
+  ]
+
+  const usersWithTokens = await Promise.all(
+    users.map(async user => ({
+      ...user,
+      token: await generateTestToken(user.username, user.userId, user.permissions)
+    }))
+  )
+
+  return usersWithTokens
+}
+
+// Function to get test users (async)
+export const getTestUsers = async () => {
+  return await generateTestUsers()
+}
+
+// Function to generate a fresh set of test users (useful for refreshing tokens)
+export const refreshTestUsers = async () => {
+  return await generateTestUsers()
+}
+
+// For backward compatibility, provide a synchronous version with pre-generated tokens
+// These will be replaced with dynamically generated ones when the component loads
+export const TEST_USERS = [
+  { username: 'user1', userId: 1, permissions: ['read', 'write'], token: 'loading...' },
+  { username: 'user2', userId: 2, permissions: ['read', 'write'], token: 'loading...' },
+  { username: 'user3', userId: 3, permissions: ['read', 'write'], token: 'loading...' },
+  { username: 'admin', userId: 4, permissions: ['read', 'write', 'admin'], token: 'loading...' },
+  { username: 'viewer', userId: 5, permissions: ['read'], token: 'loading...' }
 ]

@@ -4,10 +4,9 @@
  * Follows Dependency Inversion Principle - depends on abstractions
  */
 class YjsService {
-  constructor(connectionManager, documentManager, webSocketHandler, logger) {
+  constructor(connectionManager, documentManager, logger) {
     this.connectionManager = connectionManager;
     this.documentManager = documentManager;
-    this.webSocketHandler = webSocketHandler;
     this.logger = logger;
   }
 
