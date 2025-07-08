@@ -16,27 +16,26 @@ class TokenDecoder {
    */
   decodeTokenFromWebSocket(encodedToken) {
     try {
-      if (!encodedToken || typeof encodedToken !== 'string') {
-        throw new Error('Invalid encoded token');
+      if (typeof encodedToken !== 'string' || encodedToken.length < 10) {
+        throw new Error('Missing or short token');
       }
 
-      if (!/^[A-Za-z0-9\-_]*$/.test(encodedToken)) {
-        throw new Error('Token contains invalid characters');
+      // Attempt to decode directly
+      const decoded = Base64.decode(encodedToken, true);
+
+      // Fast structural check without regex
+      const parts = decoded.split('.');
+      if (parts.length !== 3) {
+        throw new Error('Invalid JWT structure');
       }
 
-      const token = Base64.decode(encodedToken, true);
-
-      if (!/^[A-Za-z0-9\-_]+\.[A-Za-z0-9\-_]+\.[A-Za-z0-9\-_]+$/.test(token)) {
-        throw new Error('Decoded token is not valid JWT format');
-      }
-
-      return token;
+      return decoded;
     } catch (error) {
-      this.logger.error('Token decoding failed', error, {
+      this.logger?.error?.('Token decoding failed', error, {
         encodedTokenLength: encodedToken?.length || 0,
         service: 'token-decoder'
       });
-      throw new Error('Failed to decode token from WebSocket transmission');
+      throw new Error('Failed to decode token from WebSocket');
     }
   }
 
@@ -48,27 +47,22 @@ class TokenDecoder {
    */
   encodeTokenForWebSocket(token) {
     try {
-      if (typeof token !== 'string') {
-        throw new Error('Token must be a string');
+      if (typeof token !== 'string' || token.length < 10) {
+        throw new Error('Invalid token input');
       }
 
-      const encoded = Base64.encode(token, true);
+      const encoded = Base64.encode(token, true); // base64url-safe
 
-      if (encoded.length > 1000) { // Conservative limit
-        throw new Error('Token too long for WebSocket subprotocol');
-      }
-
-      // Step 4: Validate only safe characters
-      if (!/^[A-Za-z0-9\-_]*$/.test(encoded)) {
-        throw new Error('Token contains invalid characters after encoding');
+      if (encoded.length > 1000) {
+        throw new Error('Encoded token too long for WebSocket');
       }
 
       return encoded;
     } catch (error) {
-      this.logger.error('Token encoding failed', error, {
-        service: 'token-decoder'
+      this.logger?.error?.('Token encoding failed', error, {
+        service: 'token-encoder'
       });
-      throw new Error('Failed to encode token for WebSocket transmission');
+      throw new Error('Failed to encode token for WebSocket');
     }
   }
 
