@@ -1,16 +1,26 @@
+import {
+  HiWifi,
+  HiExclamationTriangle,
+  HiUsers,
+  HiDocument,
+  HiUser,
+  HiCheckCircle,
+  HiClock
+} from 'react-icons/hi2'
+
 const ConnectionStatus = ({
-  connectionStatus, 
-  connectedUsers, 
-  user, 
+  connectionStatus,
+  connectedUsers,
+  user,
   error,
-  documentId 
+  documentId
 }) => {
   const getStatusIcon = () => {
     switch (connectionStatus) {
-      case 'connected': return '●'
-      case 'connecting': return '●'
-      case 'disconnected': return '●'
-      default: return '●'
+      case 'connected': return <HiCheckCircle />
+      case 'connecting': return <HiClock />
+      case 'disconnected': return <HiExclamationTriangle />
+      default: return <HiWifi />
     }
   }
 
@@ -35,7 +45,10 @@ const ConnectionStatus = ({
   return (
     <div className="connection-status">
       <div className="status-header">
-        <h3>Connection Status</h3>
+        <h3>
+          <HiWifi className="section-icon" />
+          Connection Status
+        </h3>
         <div className="status-indicator">
           <span className="status-icon" style={{ color: getStatusColor() }}>
             {getStatusIcon()}
@@ -51,27 +64,45 @@ const ConnectionStatus = ({
       )}
 
       <div className="document-info">
-        <p><strong>Document:</strong> {documentId}</p>
-        <p><strong>Your User:</strong> {user?.username} (ID: {user?.user_id})</p>
-        <p><strong>Permissions:</strong> {user?.permissions?.join(', ')}</p>
+        <h4>
+          <HiDocument className="section-icon" />
+          Document Information
+        </h4>
+        <div className="info-grid">
+          <div className="info-item">
+            <span className="info-label">Document:</span>
+            <span className="info-value">{documentId}</span>
+          </div>
+          <div className="info-item">
+            <span className="info-label">Your User:</span>
+            <span className="info-value">{user?.username} (ID: {user?.id || user?.user_id})</span>
+          </div>
+          <div className="info-item">
+            <span className="info-label">Permissions:</span>
+            <span className="info-value">{user?.permissions?.join(', ') || 'read, write'}</span>
+          </div>
+        </div>
       </div>
 
       <div className="users-section">
-        <h4>Connected Users ({connectedUsers.size + 1})</h4>
+        <h4>
+          <HiUsers className="section-icon" />
+          Connected Users ({connectedUsers.size + 1})
+        </h4>
         
         <div className="user-list">
           {/* Current user */}
           <div className="user-item current-user">
-            <div 
-              className="user-avatar" 
-              style={{ backgroundColor: '#667eea' }}
+            <div
+              className="user-avatar current-user-avatar"
+              style={{ backgroundColor: '#2563eb' }}
             >
-              {user?.username?.charAt(0)?.toUpperCase()}
+              <HiUser className="avatar-icon" />
             </div>
             <div className="user-info">
               <span className="user-name">{user?.username} (You)</span>
               <span className="user-status">
-                <span className="status-dot" style={{ color: '#34c759' }}>●</span>
+                <HiCheckCircle className="status-icon-small" />
                 Online
               </span>
             </div>
@@ -80,16 +111,16 @@ const ConnectionStatus = ({
           {/* Other connected users */}
           {Array.from(connectedUsers.entries()).map(([clientId, userData]) => (
             <div key={clientId} className="user-item">
-              <div 
-                className="user-avatar" 
+              <div
+                className="user-avatar"
                 style={{ backgroundColor: userData.color }}
               >
-                {userData.name?.charAt(0)?.toUpperCase()}
+                <HiUser className="avatar-icon" />
               </div>
               <div className="user-info">
                 <span className="user-name">{userData.name}</span>
                 <span className="user-status">
-                  <span className="status-dot" style={{ color: '#34c759' }}>●</span>
+                  <HiCheckCircle className="status-icon-small" />
                   Online
                 </span>
               </div>

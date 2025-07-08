@@ -5,6 +5,20 @@ import { useEditor, EditorContent } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import Collaboration from '@tiptap/extension-collaboration'
 import CollaborationCursor from '@tiptap/extension-collaboration-cursor'
+import {
+  HiBold,
+  HiItalic,
+  HiStrikethrough,
+  HiListBullet,
+  HiNumberedList,
+  HiChatBubbleLeft,
+  HiCodeBracketSquare,
+  HiCheckCircle,
+  HiArrowPath,
+  HiSignal,
+  HiSignalSlash,
+  HiLockClosed
+} from 'react-icons/hi2'
 
 // Generate consistent colors for users
 const getUserColor = (username) => {
@@ -204,7 +218,7 @@ const TiptapEditor = ({ doc, provider, user, isConnected }) => {
             disabled={!editor || !hasWritePermission}
             title={!hasWritePermission ? 'Read-only mode' : 'Bold'}
           >
-            <strong>B</strong>
+            <HiBold />
           </button>
           <button
             onClick={() => editor?.chain().focus().toggleItalic().run()}
@@ -212,7 +226,7 @@ const TiptapEditor = ({ doc, provider, user, isConnected }) => {
             disabled={!editor || !hasWritePermission}
             title={!hasWritePermission ? 'Read-only mode' : 'Italic'}
           >
-            <em>I</em>
+            <HiItalic />
           </button>
           <button
             onClick={() => editor?.chain().focus().toggleStrike().run()}
@@ -220,7 +234,7 @@ const TiptapEditor = ({ doc, provider, user, isConnected }) => {
             disabled={!editor || !hasWritePermission}
             title={!hasWritePermission ? 'Read-only mode' : 'Strikethrough'}
           >
-            <s>S</s>
+            <HiStrikethrough />
           </button>
         </div>
 
@@ -258,7 +272,7 @@ const TiptapEditor = ({ doc, provider, user, isConnected }) => {
             disabled={!editor || !hasWritePermission}
             title={!hasWritePermission ? 'Read-only mode' : 'Bullet List'}
           >
-            • List
+            <HiListBullet />
           </button>
           <button
             onClick={() => editor?.chain().focus().toggleOrderedList().run()}
@@ -266,7 +280,7 @@ const TiptapEditor = ({ doc, provider, user, isConnected }) => {
             disabled={!editor || !hasWritePermission}
             title={!hasWritePermission ? 'Read-only mode' : 'Numbered List'}
           >
-            1. List
+            <HiNumberedList />
           </button>
         </div>
 
@@ -277,7 +291,7 @@ const TiptapEditor = ({ doc, provider, user, isConnected }) => {
             disabled={!editor || !hasWritePermission}
             title={!hasWritePermission ? 'Read-only mode' : 'Quote'}
           >
-            " Quote
+            <HiChatBubbleLeft />
           </button>
           <button
             onClick={() => editor?.chain().focus().toggleCodeBlock().run()}
@@ -285,7 +299,7 @@ const TiptapEditor = ({ doc, provider, user, isConnected }) => {
             disabled={!editor || !hasWritePermission}
             title={!hasWritePermission ? 'Read-only mode' : 'Code Block'}
           >
-            &lt;/&gt; Code
+            <HiCodeBracketSquare />
           </button>
         </div>
       </div>
@@ -299,14 +313,35 @@ const TiptapEditor = ({ doc, provider, user, isConnected }) => {
 
       <div className="editor-status">
         <span className="status-indicator">
-          {isEditorReady ? '✅ Editor Ready' : '🔄 Loading...'}
+          {isEditorReady ? (
+            <>
+              <HiCheckCircle style={{ color: '#10b981' }} />
+              Editor Ready
+            </>
+          ) : (
+            <>
+              <HiArrowPath style={{ color: '#f59e0b' }} />
+              Loading...
+            </>
+          )}
         </span>
         <span className="connection-indicator">
-          {isConnected ? '🟢 Connected' : '🔴 Disconnected'}
+          {isConnected ? (
+            <>
+              <HiSignal style={{ color: '#10b981' }} />
+              Connected
+            </>
+          ) : (
+            <>
+              <HiSignalSlash style={{ color: '#ef4444' }} />
+              Disconnected
+            </>
+          )}
         </span>
         {!hasWritePermission && (
           <span className="permission-indicator" style={{ color: '#ff6b6b', fontWeight: 'bold' }}>
-            🔒 Read-Only Mode
+            <HiLockClosed style={{ marginRight: '4px' }} />
+            Read-Only Mode
           </span>
         )}
       </div>

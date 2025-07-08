@@ -12,7 +12,8 @@ RUN addgroup -g 1001 -S nodejs && \
 COPY package*.json ./
 
 # Install ALL dependencies (including devDependencies for development)
-RUN npm ci && npm cache clean --force
+# Use npm install instead of npm ci for development to handle package updates better
+RUN npm install && npm cache clean --force
 
 # Change ownership of app directory to nodejs user
 RUN chown -R nodejs:nodejs /app
