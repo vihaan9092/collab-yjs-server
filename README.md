@@ -139,6 +139,47 @@ make health
 make clean
 ```
 
+### Debug Commands
+
+For VS Code debugging with breakpoints and step-through debugging:
+
+```bash
+# Start debug server (waits for debugger to attach)
+make vscodedebug
+```
+
+**VS Code Debug Setup:**
+
+1. **Start the debug server:**
+   ```bash
+   make vscodedebug
+   ```
+
+2. **Attach VS Code debugger:**
+   - Open VS Code
+   - Go to Run and Debug (Ctrl+Shift+D / Cmd+Shift+D)
+   - Select "Attach to Node.js (Docker)" from the dropdown
+   - Click the green play button or press F5
+
+3. **Set breakpoints:**
+   - Click in the gutter next to line numbers in your source files
+   - The debugger will pause execution when breakpoints are hit
+
+4. **Debug features available:**
+   - Step through code (F10 = step over, F11 = step into, Shift+F11 = step out)
+   - Inspect variables in the Variables panel
+   - Evaluate expressions in the Debug Console
+   - View call stack and loaded scripts
+
+**Debug Configuration Details:**
+- **Debug Port:** localhost:9229
+- **Application Port:** localhost:3000
+- **Source Maps:** Automatically mapped between local and container paths
+- **Auto-restart:** Debugger reconnects automatically when code changes
+
+**Alternative: Local Debugging**
+You can also debug locally without Docker by selecting "Debug Node.js (Local)" configuration, but you'll need Redis running locally.
+
 ### Production Commands
 ```bash
 # Build production image
@@ -176,8 +217,28 @@ The server uses JWT-based authentication with Redis session management.
 ### Client Integration
 
 ```javascript
-// WebSocket connection with authentication
-const wsUrl = `ws://localhost:3000/${documentId}?token=${encodeURIComponent(jwtToken)}`;
+// 🔐 SECURE: WebSocket connection with header-based authentication
+import { WebsocketProvider } from 'y-websocket'
+
+// Custom WebSocket class that adds Authorization header
+class SecureWebSocket extends WebSocket {
+  constructor(url, protocols) {
+    const options = {
+      headers: {
+        'Authorization': `Bearer ${jwtToken}`
+      }
+    };
+    super(url, protocols, options);
+  }
+}
+
+// Create provider with secure authentication
+const provider = new WebsocketProvider(
+  'ws://localhost:3000',
+  documentId,
+  doc,
+  { WebSocketPolyfill: SecureWebSocket }
+);
 
 // HTTP requests
 const response = await fetch('/api/stats', {

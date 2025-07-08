@@ -6,6 +6,7 @@ IMAGE_NAME := realtime-yjs-server
 CONTAINER_NAME := realtime-yjs-server-dev
 PORT := 3000
 DEV_COMPOSE := docker-compose -f docker-compose.dev.yml
+DEBUG_COMPOSE := docker-compose -f docker-compose.dev.yml -f docker-compose.debug.yml
 PROD_COMPOSE := docker-compose
 
 # Colors for output
@@ -24,7 +25,10 @@ help: ## Show this help message
 	@echo "$(BLUE)Realtime YJS Server - Docker Management$(NC)"
 	@echo ""
 	@echo "$(GREEN)Development Commands (Default - with hot reloading):$(NC)"
-	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z_-]+:.*?## / {printf "  $(YELLOW)%-20s$(NC) %s\n", $$1, $$2}' $(MAKEFILE_LIST) | grep -E "(build|run|run-detached|logs|stop|shell|health|clean)"
+	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z_-]+:.*?## / {printf "  $(YELLOW)%-20s$(NC) %s\n", $$1, $$2}' $(MAKEFILE_LIST) | grep -E "(build|run|run-detached|logs|stop|shell|shell-client|health|clean)"
+	@echo ""
+	@echo "$(GREEN)Debug Commands:$(NC)"
+	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z_-]+:.*?## / {printf "  $(YELLOW)%-20s$(NC) %s\n", $$1, $$2}' $(MAKEFILE_LIST) | grep -E "vscodedebug"
 	@echo ""
 	@echo "$(GREEN)Production Commands:$(NC)"
 	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z_-]+:.*?## / {printf "  $(YELLOW)%-20s$(NC) %s\n", $$1, $$2}' $(MAKEFILE_LIST) | grep -E "prod-"
@@ -38,14 +42,19 @@ build: ## Build the development Docker services with hot reloading
 	@echo "$(BLUE)[BUILD]$(NC) Building development Docker services with hot reloading"
 	$(DEV_COMPOSE) build
 	@echo "$(GREEN)[SUCCESS]$(NC) Development Docker services built successfully"
+	@echo "$(BLUE)[INFO]$(NC) Services built:"
+	@echo "  - Backend API: http://localhost:3000"
+	@echo "  - React Client: http://localhost:3001"
+	@echo "  - Redis: localhost:6379"
 
 # Run the Docker services with real-time logs using Docker Compose (Development)
 .PHONY: run
 run: ## Run the development services with hot reloading and real-time logs
 	@echo "$(BLUE)[RUN]$(NC) Starting development services with hot reloading"
 	@echo "$(GREEN)[INFO]$(NC) Starting services with real-time logs (Press Ctrl+C to stop)"
-	@echo "$(BLUE)[INFO]$(NC) Access the application at: http://localhost:$(PORT)"
-	@echo "$(YELLOW)[INFO]$(NC) Code changes will automatically restart the server"
+	@echo "$(BLUE)[INFO]$(NC) Backend API: http://localhost:3000"
+	@echo "$(BLUE)[INFO]$(NC) React Client: http://localhost:3001"
+	@echo "$(YELLOW)[INFO]$(NC) Code changes will automatically restart both services"
 	@echo "$(YELLOW)[LOGS]$(NC) Service logs:"
 	$(DEV_COMPOSE) up
 
@@ -55,9 +64,26 @@ run-detached: ## Run the development services with hot reloading in background
 	@echo "$(BLUE)[RUN]$(NC) Starting development services in background with hot reloading"
 	$(DEV_COMPOSE) up -d
 	@echo "$(GREEN)[SUCCESS]$(NC) Development services started in background!"
-	@echo "$(BLUE)[INFO]$(NC) Access the application at: http://localhost:$(PORT)"
-	@echo "$(YELLOW)[INFO]$(NC) Code changes will automatically restart the server"
-	@echo "$(BLUE)[INFO]$(NC) Use 'make logs' to view logs or 'make shell' to access container"
+	@echo "$(BLUE)[INFO]$(NC) Backend API: http://localhost:3000"
+	@echo "$(BLUE)[INFO]$(NC) React Client: http://localhost:3001"
+	@echo "$(YELLOW)[INFO]$(NC) Code changes will automatically restart both services"
+	@echo "$(BLUE)[INFO]$(NC) Use 'make logs' to view logs or 'make shell' to access containers"
+
+# VSCode debug mode
+.PHONY: vscodedebug
+vscodedebug: stop ## VSCode debug mode - starts server with Node.js inspector for debugging
+	@echo "$(BLUE)[DEBUG]$(NC) Starting VSCode debug mode"
+	@echo "$(YELLOW)[INFO]$(NC) Node.js inspector will be available on localhost:9229"
+	@echo "$(YELLOW)[INFO]$(NC) Hot reloading enabled with debug support"
+	@echo "$(BLUE)[INFO]$(NC) Backend API: http://localhost:3000"
+	@echo "$(BLUE)[INFO]$(NC) React Client: http://localhost:3001"
+	@echo "$(GREEN)[SETUP]$(NC) To attach VS Code debugger:"
+	@echo "  1. Open VS Code"
+	@echo "  2. Go to Run and Debug (Ctrl+Shift+D)"
+	@echo "  3. Select 'Attach to Node.js (Docker)'"
+	@echo "  4. Press F5 or click the green play button"
+	@echo "$(BLUE)[STARTING]$(NC) Starting debug services..."
+	ENABLE_NODE_DEBUG=1 $(DEBUG_COMPOSE) up --remove-orphans
 
 # Production Commands
 .PHONY: prod-build
@@ -145,13 +171,22 @@ shell: ## Access the running development container shell
 	@echo "$(BLUE)[SHELL]$(NC) Accessing development container shell"
 	$(DEV_COMPOSE) exec app /bin/sh
 
+# Access client container shell
+.PHONY: shell-client
+shell-client: ## Access the running client container shell
+	@echo "$(BLUE)[SHELL]$(NC) Accessing client container shell"
+	$(DEV_COMPOSE) exec client /bin/sh
+
 # Check development service health
 .PHONY: health
 health: ## Check the health of running development services
 	@echo "$(BLUE)[HEALTH]$(NC) Checking development service health"
 	@echo "App service status:"
 	@$(DEV_COMPOSE) ps app
+	@echo "Client service status:"
+	@$(DEV_COMPOSE) ps client
 	@echo "Redis service status:"
 	@$(DEV_COMPOSE) ps redis
-	@echo "Testing app connectivity:"
-	@curl -f http://localhost:3000 >/dev/null 2>&1 && echo "$(GREEN)[OK]$(NC) App is responding" || echo "$(RED)[ERROR]$(NC) App is not responding"
+	@echo "Testing connectivity:"
+	@curl -f http://localhost:3000/health >/dev/null 2>&1 && echo "$(GREEN)[OK]$(NC) Backend API is responding" || echo "$(RED)[ERROR]$(NC) Backend API is not responding"
+	@curl -f http://localhost:3001 >/dev/null 2>&1 && echo "$(GREEN)[OK]$(NC) React Client is responding" || echo "$(RED)[ERROR]$(NC) React Client is not responding"

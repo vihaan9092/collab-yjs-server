@@ -97,14 +97,26 @@ class KeystrokeAnalyzer extends EventEmitter {
 
     // Generate test token
     const token = this.generateTestToken(user);
-    
+
     try {
-      // Create WebSocket provider
+      // 🔐 SECURE: Create WebSocket provider with header-based authentication
+      class SecureTestWebSocket extends WebSocket {
+        constructor(url, protocols) {
+          const options = {
+            headers: {
+              'Authorization': `Bearer ${token}`
+            }
+          };
+          super(url, protocols, options);
+        }
+      }
+
+      // Create WebSocket provider with secure authentication
       user.provider = new WebsocketProvider(
         this.config.serverUrl,
         this.config.documentId,
         user.doc,
-        { params: { token } }
+        { WebSocketPolyfill: SecureTestWebSocket }
       );
 
       // Setup monitoring for this user

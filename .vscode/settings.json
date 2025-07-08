@@ -1,0 +1,19 @@
+{
+    "debug.node.autoAttach": "off",
+    "debug.javascript.autoAttachFilter": "disabled",
+    "debug.terminal.clearBeforeReusing": true,
+    "files.watcherExclude": {
+        "**/node_modules/**": true,
+        "**/logs/**": true,
+        "**/.git/**": true
+    },
+    "search.exclude": {
+        "**/node_modules": true,
+        "**/logs": true,
+        "**/.git": true
+    },
+    "files.exclude": {
+        "**/node_modules": false,
+        "**/logs": true
+    }
+}

@@ -145,14 +145,26 @@ class WebSocketLoadTester extends EventEmitter {
 
     // Generate authentication token
     const token = this.generateTestToken(user);
-    
+
     try {
-      // Create WebSocket provider with enhanced monitoring
+      // 🔐 SECURE: Create WebSocket provider with header-based authentication
+      // Custom WebSocket class that adds Authorization header
+      class SecureTestWebSocket extends WebSocket {
+        constructor(url, protocols) {
+          const options = {
+            headers: {
+              'Authorization': `Bearer ${token}`
+            }
+          };
+          super(url, protocols, options);
+        }
+      }
+
       user.provider = new WebsocketProvider(
         this.config.serverUrl,
         this.config.documentId,
         user.doc,
-        { params: { token } }
+        { WebSocketPolyfill: SecureTestWebSocket }
       );
 
       // Setup comprehensive monitoring

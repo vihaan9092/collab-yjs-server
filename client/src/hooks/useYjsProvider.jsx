@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import * as Y from 'yjs'
 import { WebsocketProvider } from 'y-websocket'
 import Debug from '../utils/debug'
+import { createSecureProviderConfig, validateTokenFormat, getWebSocketErrorInfo, forceCloseWebSocket } from '../utils/secureWebSocket'
 
 export const useYjsProvider = (documentId, token, user) => {
   const [provider, setProvider] = useState(null)
@@ -16,7 +17,7 @@ export const useYjsProvider = (documentId, token, user) => {
 
   // Connection status handler
   const handleConnectionStatus = useCallback((event) => {
-    console.log('[YJS] Connection status changed:', event.status)
+    Debug.yjs('Connection status changed', { status: event.status })
 
     // Use setTimeout to avoid setState during render
     setTimeout(() => {
@@ -24,9 +25,9 @@ export const useYjsProvider = (documentId, token, user) => {
 
       if (event.status === 'connected') {
         setError(null)
-        console.log('[YJS] ✅ Connected to collaboration server')
+        Debug.yjs('Connected to collaboration server')
       } else if (event.status === 'disconnected') {
-        console.log('[YJS] ❌ Disconnected from collaboration server')
+        Debug.yjs('Disconnected from collaboration server')
       }
     }, 0)
   }, [])
@@ -51,13 +52,13 @@ export const useYjsProvider = (documentId, token, user) => {
     // Use setTimeout to avoid setState during render
     setTimeout(() => {
       setConnectedUsers(users)
-      console.log('[YJS] Connected users updated:', users.size)
+      Debug.yjs('Connected users updated', { userCount: users.size })
     }, 0)
   }, [])
 
   // Error handler
   const handleError = useCallback((error) => {
-    console.error('[YJS] Provider error:', error)
+    Debug.error('YJS', 'Provider error', error)
 
     // Use setTimeout to avoid setState during render
     setTimeout(() => {
@@ -68,53 +69,85 @@ export const useYjsProvider = (documentId, token, user) => {
   // Initialize YJS document and provider
   const initializeProvider = useCallback(() => {
     if (!documentId || !token || !user) {
-      console.log('[YJS] Missing required parameters for initialization')
+      Debug.yjs('Missing required parameters for initialization', { documentId: !!documentId, token: !!token, user: !!user })
+      setError('Missing required parameters: documentId, token, or user')
+      return
+    }
+
+    // Validate token format before proceeding
+    if (!validateTokenFormat(token)) {
+      Debug.error('YJS', 'Invalid token format')
+      setError('Invalid authentication token format')
+      return
+    }
+
+    // Validate user object
+    if (!user.username || !user.user_id) {
+      Debug.error('YJS', 'Invalid user object', user)
+      setError('Invalid user information')
       return
     }
 
     try {
       // Create new YJS document first
       const newDoc = new Y.Doc()
-      console.log('[YJS] YJS document created')
-
+    
       // Set document immediately so components can access it
       docRef.current = newDoc
       setDoc(newDoc)
 
       // Small delay to ensure document is fully ready
       setTimeout(() => {
-        // Create WebSocket provider with authentication
-        // Best practice: Use 'params' option if y-websocket >= 1.4.0
-        console.log('[YJS] Connecting to: ws://localhost:3000 for document:', documentId)
-        console.log('[YJS] Token:', token ? token.substring(0, 50) + '...' : 'none')
+        Debug.yjs('Connecting to collaboration server', { documentId, serverUrl: 'ws://localhost:3000' })
+        Debug.yjs('Using secure subprotocol-based authentication')
 
-        const newProvider = new WebsocketProvider(
-          'ws://localhost:3000',      // Just the origin, no document ID or query
-          documentId,                 // Document ID, gets added as path
-          newDoc,
-          { params: { token } }       // y-websocket auto-appends as query param
-        )
+        let newProvider
+        try {
+          const secureConfig = createSecureProviderConfig(token, {
+            connect: true,
+            resyncInterval: 5000
+          })
+
+          newProvider = new WebsocketProvider(
+            'ws://localhost:3000',
+            documentId,
+            newDoc,
+            secureConfig
+          )
+        } catch (error) {
+          Debug.error('YJS', 'Failed to create WebSocket provider', error)
+          setError(`Failed to create connection: ${error.message}`)
+          return
+        }
 
         providerRef.current = newProvider
         setProvider(newProvider)
 
-        // Set up event listeners
         newProvider.on('status', handleConnectionStatus)
         newProvider.on('connection-error', handleError)
 
-        // Add more detailed error handling
         newProvider.on('connection-close', (event) => {
-          console.log('[YJS] Connection closed:', event)
+          const errorInfo = getWebSocketErrorInfo(event)
+          if (errorInfo.isAuthError || event.code !== 1000) {
+            setError(errorInfo.userMessage)
+          }
         })
 
-        // Listen to the underlying WebSocket events
+        newProvider.on('disconnect', () => {
+          Debug.yjs('Provider disconnected - all reconnections will use secure authentication')
+        })
+
         if (newProvider.ws) {
           newProvider.ws.addEventListener('error', (event) => {
-            console.error('[YJS] WebSocket error:', event)
+            Debug.error('YJS', 'WebSocket error', event)
+            setError('WebSocket connection error')
           })
 
           newProvider.ws.addEventListener('close', (event) => {
-            console.log('[YJS] WebSocket closed:', event.code, event.reason)
+            const errorInfo = getWebSocketErrorInfo(event)
+            if (errorInfo.isAuthError || event.code !== 1000) {
+              setError(errorInfo.userMessage)
+            }
           })
         }
 
@@ -146,9 +179,13 @@ export const useYjsProvider = (documentId, token, user) => {
   // Cleanup function
   const cleanup = useCallback(() => {
     if (providerRef.current) {
-      console.log('[YJS] Cleaning up provider')
-      
+      Debug.yjs('Cleaning up provider and closing WebSocket connection')
+
       try {
+        if (providerRef.current.ws) {
+          forceCloseWebSocket(providerRef.current.ws, 'Provider cleanup')
+        }
+
         providerRef.current.off('status', handleConnectionStatus)
         providerRef.current.off('connection-error', handleError)
         if (providerRef.current.awareness) {
@@ -156,9 +193,9 @@ export const useYjsProvider = (documentId, token, user) => {
         }
         providerRef.current.destroy()
       } catch (error) {
-        console.warn('[YJS] Error during cleanup:', error)
+        Debug.warn('YJS', 'Error during cleanup', error)
       }
-      
+
       providerRef.current = null
       setProvider(null)
     }
@@ -167,9 +204,9 @@ export const useYjsProvider = (documentId, token, user) => {
       try {
         docRef.current.destroy()
       } catch (error) {
-        console.warn('[YJS] Error destroying document:', error)
+        Debug.warn('YJS', 'Error destroying document', error)
       }
-      
+
       docRef.current = null
       setDoc(null)
     }
@@ -184,6 +221,8 @@ export const useYjsProvider = (documentId, token, user) => {
     if (documentId && token && user) {
       cleanup() // Clean up any existing provider
       initializeProvider()
+    } else {
+      cleanup()
     }
 
     return cleanup

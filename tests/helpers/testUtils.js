@@ -24,15 +24,19 @@ function createTestToken(payload = {}) {
 }
 
 /**
- * Create a test WebSocket connection
+ * Create a test WebSocket connection with secure header-based authentication
  */
 function createTestWebSocket(url = 'ws://localhost:3000/test-doc', token = null) {
-  const wsUrl = new URL(url);
+  // 🔐 SECURE: Use Authorization header instead of URL query parameter
+  const options = {};
+
   if (token) {
-    wsUrl.searchParams.set('token', token);
+    options.headers = {
+      'Authorization': `Bearer ${token}`
+    };
   }
-  
-  return new WebSocket(wsUrl.toString());
+
+  return new WebSocket(url, [], options);
 }
 
 /**
