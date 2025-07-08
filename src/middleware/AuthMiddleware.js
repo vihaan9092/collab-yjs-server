@@ -530,37 +530,7 @@ class AuthMiddleware {
         }
     }
 
-    /**
-     * Clean up user session on disconnect
-     * @param {Object} socket - WebSocket connection
-     */
-    async cleanupUserSession(socket) {
-        if (socket.user) {
-            this.logger.info('Cleaning up user session', {
-                userId: socket.user.id,
-                socketId: socket.id
-            });
-            
-            // Could implement session cleanup logic here
-            // For example, updating last seen timestamp
-        }
-    }
 
-    /**
-     * Get user session info
-     * @param {string} userId - User ID
-     * @returns {Object} - User session data
-     */
-    async getUserSession(userId) {
-        try {
-            const cacheKey = `user:${userId}`;
-            const cachedUser = await this.redis.get(cacheKey);
-            return cachedUser ? JSON.parse(cachedUser) : null;
-        } catch (error) {
-            this.logger.error('Failed to get user session:', error.message);
-            return null;
-        }
-    }
 
     /**
      * Close Redis connection

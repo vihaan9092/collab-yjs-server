@@ -5,7 +5,6 @@ const Logger = require('./utils/Logger');
 const WebSocketServer = require('./server/WebSocketServer');
 const ConnectionManager = require('./managers/ConnectionManager');
 const DocumentManager = require('./managers/DocumentManager');
-const WebSocketHandler = require('./handlers/WebSocketHandler');
 const YjsService = require('./services/YjsService');
 
 /**
@@ -18,7 +17,6 @@ class RealtimeYjsServer {
     this.webSocketServer = null;
     this.connectionManager = null;
     this.documentManager = null;
-    this.webSocketHandler = null;
     this.yjsService = null;
     this.isShuttingDown = false;
   }
@@ -40,28 +38,18 @@ class RealtimeYjsServer {
       this.connectionManager = new ConnectionManager(this.logger);
       this.documentManager = new DocumentManager(this.logger, this.config.get('yjs'));
 
-      // Initialize handlers
-      this.webSocketHandler = new WebSocketHandler(
-        this.connectionManager,
-        this.documentManager,
-        this.logger
-      );
-
       // Initialize services
       this.yjsService = new YjsService(
         this.connectionManager,
         this.documentManager,
-        this.webSocketHandler,
         this.logger
       );
 
       // Initialize WebSocket server
       this.webSocketServer = new WebSocketServer(this.config, this.logger);
       this.webSocketServer.initialize();
+      this.webSocketServer.initializeWebSocket();
       this.webSocketServer.setYjsService(this.yjsService);
-
-      // Initialize WebSocket server
-      const wss = this.webSocketServer.initializeWebSocket();
 
       // Initialize YJS service
       await this.yjsService.initialize();
