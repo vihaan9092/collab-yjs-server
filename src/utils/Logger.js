@@ -1,9 +1,5 @@
 const winston = require('winston');
 
-/**
- * Logger Utility Class
- * Follows Single Responsibility Principle - handles only logging functionality
- */
 class Logger {
   constructor(config = {}) {
     const logLevel = config.level || process.env.LOG_LEVEL || 'info';
@@ -23,7 +19,6 @@ class Logger {
       ]
     });
 
-    // Add console transport for non-production environments
     if (process.env.NODE_ENV !== 'production') {
       this.logger.add(new winston.transports.Console({
         format: winston.format.combine(

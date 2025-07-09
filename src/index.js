@@ -7,9 +7,6 @@ const ConnectionManager = require('./managers/ConnectionManager');
 const DocumentManager = require('./managers/DocumentManager');
 const YjsService = require('./services/YjsService');
 
-/**
- * Main Application Class
- */
 class RealtimeYjsServer {
   constructor() {
     this.config = null;
@@ -21,36 +18,27 @@ class RealtimeYjsServer {
     this.isShuttingDown = false;
   }
 
-  /**
-   * Initialize all components
-   */
   async initialize() {
     try {
-      // Initialize configuration
       this.config = new ServerConfig();
       this.config.validate();
 
-      // Initialize logger
       this.logger = new Logger(this.config.get('logging'));
       this.logger.info('Starting Realtime YJS Server...');
 
-      // Initialize managers (following dependency injection)
       this.connectionManager = new ConnectionManager(this.logger);
       this.documentManager = new DocumentManager(this.logger, this.config.get('yjs'));
 
-      // Initialize services
       this.yjsService = new YjsService(
         this.connectionManager,
         this.documentManager,
         this.logger
       );
 
-      // Initialize WebSocket server with refactored architecture
       this.webSocketServer = new WebSocketServer(this.config, this.logger);
       this.webSocketServer.setYjsService(this.yjsService);
       this.webSocketServer.initialize();
 
-      // Initialize YJS service
       await this.yjsService.initialize();
 
       this.logger.info('All components initialized successfully');
@@ -60,9 +48,6 @@ class RealtimeYjsServer {
     }
   }
 
-  /**
-   * Start the server
-   */
   start() {
     try {
       this.webSocketServer.start();
@@ -74,7 +59,6 @@ class RealtimeYjsServer {
         architecture: 'Refactored with Dependency Injection'
       });
 
-      // Setup graceful shutdown
       this.setupGracefulShutdown();
 
     } catch (error) {
@@ -83,9 +67,6 @@ class RealtimeYjsServer {
     }
   }
 
-  /**
-   * Setup graceful shutdown handlers
-   */
   setupGracefulShutdown() {
     const shutdownHandler = async (signal) => {
       if (this.isShuttingDown) {
@@ -97,12 +78,10 @@ class RealtimeYjsServer {
       this.logger.info(`Received ${signal}, starting graceful shutdown...`);
 
       try {
-        // Shutdown YJS service first (notifies clients)
         if (this.yjsService) {
           await this.yjsService.shutdown();
         }
 
-        // Stop WebSocket server
         if (this.webSocketServer) {
           await this.webSocketServer.stop();
         }
@@ -115,26 +94,20 @@ class RealtimeYjsServer {
       }
     };
 
-    // Handle different shutdown signals
     process.on('SIGTERM', () => shutdownHandler('SIGTERM'));
     process.on('SIGINT', () => shutdownHandler('SIGINT'));
 
-    // Handle uncaught exceptions
     process.on('uncaughtException', (error) => {
       this.logger.error('Uncaught Exception', error);
       shutdownHandler('uncaughtException');
     });
 
-    // Handle unhandled promise rejections
     process.on('unhandledRejection', (reason, promise) => {
       this.logger.error('Unhandled Rejection', reason, { promise });
       shutdownHandler('unhandledRejection');
     });
   }
 
-  /**
-   * Get server health status
-   */
   getHealthStatus() {
     if (this.yjsService) {
       return this.yjsService.healthCheck();
@@ -143,11 +116,7 @@ class RealtimeYjsServer {
   }
 }
 
-/**
- * Main execution
- */
 async function main() {
-  // Initialize logger for startup
   const Logger = require('./utils/Logger');
   const logger = new Logger({ service: 'startup' });
 
@@ -164,7 +133,6 @@ async function main() {
   }
 }
 
-// Start the application
 if (require.main === module) {
   main();
 }

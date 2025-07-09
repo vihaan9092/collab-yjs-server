@@ -1,8 +1,3 @@
-/**
- * YJS Service - Main orchestrator for YJS functionality
- * Follows Single Responsibility Principle - orchestrates YJS operations
- * Follows Dependency Inversion Principle - depends on abstractions
- */
 class YjsService {
   constructor(connectionManager, documentManager, logger) {
     this.connectionManager = connectionManager;
@@ -10,24 +5,15 @@ class YjsService {
     this.logger = logger;
   }
 
-  /**
-   * Initialize the YJS service
-   */
   async initialize() {
     this.logger.info('YJS Service initializing...');
-
-    // Setup periodic cleanup
     this.setupPeriodicCleanup();
-
     this.logger.info('YJS Service initialized successfully');
   }
 
-  /**
-   * Setup periodic cleanup of unused documents
-   */
   setupPeriodicCleanup() {
-    const cleanupInterval = 5 * 60 * 1000; // 5 minutes
-    
+    const cleanupInterval = 5 * 60 * 1000;
+
     setInterval(async () => {
       try {
         const cleanedCount = await this.documentManager.cleanup();
@@ -40,9 +26,6 @@ class YjsService {
     }, cleanupInterval);
   }
 
-  /**
-   * Get service statistics
-   */
   getStats() {
     try {
       const connectionStats = this.connectionManager.getConnectionStats();

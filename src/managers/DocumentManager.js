@@ -2,28 +2,21 @@ const IDocumentManager = require('../interfaces/IDocumentManager');
 const { getYDoc, docs, getDocumentStateSize, applyUpdateToDoc } = require('../utils/y-websocket-utils');
 const RedisDocumentSync = require('../services/RedisDocumentSync');
 
-/**
- * Document Manager Implementation for y-websocket
- * Now works with y-websocket's global document storage
- */
 class DocumentManager extends IDocumentManager {
   constructor(logger, config = {}) {
     super();
     this.logger = logger;
     this.config = config;
-    this.documentStats = new Map(); // documentId -> stats object
+    this.documentStats = new Map();
     this.gcEnabled = config.gcEnabled !== false;
 
-    // Initialize Redis document synchronization
     this.redisSync = new RedisDocumentSync(logger, {
       redisUrl: config.redisUrl || process.env.REDIS_URL,
       keyPrefix: config.redisKeyPrefix || 'collab:'
     });
 
-    // Track documents with active sync
     this.syncedDocuments = new Set();
 
-    // Setup cleanup interval
     if (config.cleanupInterval) {
       this.cleanupInterval = setInterval(() => {
         this.cleanup();
@@ -33,10 +26,8 @@ class DocumentManager extends IDocumentManager {
 
   async getDocument(documentId) {
     try {
-      // Use y-websocket's getYDoc function
       const doc = await getYDoc(documentId, this.gcEnabled);
 
-      // Initialize stats if not exists
       if (!this.documentStats.has(documentId)) {
         this.documentStats.set(documentId, {
           createdAt: new Date(),

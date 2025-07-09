@@ -2,11 +2,6 @@ const WebSocket = require('ws');
 const { setupWSConnection } = require('../utils/y-websocket-utils');
 const { extractDocumentId, parseDocumentMetadata } = require('../utils/DocumentUtils');
 
-/**
- * WebSocketHandler
- * Handles WebSocket server setup and connection management
- * Follows Single Responsibility Principle - only handles WebSocket operations
- */
 class WebSocketHandler {
   constructor(logger, authenticationHandler) {
     this.logger = logger;
@@ -14,22 +9,14 @@ class WebSocketHandler {
     this.wss = null;
   }
 
-  /**
-   * Initialize WebSocket server
-   * @param {http.Server} httpServer - HTTP server instance
-   * @returns {WebSocket.Server} - WebSocket server instance
-   */
   initialize(httpServer) {
     try {
-      // Create WebSocket server without a server (we'll handle upgrade manually)
       this.wss = new WebSocket.Server({ noServer: true });
 
-      // Handle WebSocket connections
       this.wss.on('connection', async (ws, req) => {
         await this.handleConnection(ws, req);
       });
 
-      // Handle WebSocket upgrade requests
       httpServer.on('upgrade', async (request, socket, head) => {
         await this.handleUpgrade(request, socket, head);
       });
@@ -47,15 +34,10 @@ class WebSocketHandler {
     }
   }
 
-  /**
-   * Handle new WebSocket connection
-   * @param {WebSocket} ws - WebSocket connection
-   * @param {Object} req - HTTP request object
-   */
+
   async handleConnection(ws, req) {
-    // Extract document ID and metadata
     const documentId = extractDocumentId(req);
-    const documentMetadata = parseDocumentMetadata(req);
+    // const documentMetadata = parseDocumentMetadata(req);
     const connectionId = `ws-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`;
 
     this.logger.info('New WebSocket connection', {
@@ -66,14 +48,12 @@ class WebSocketHandler {
     });
 
     try {
-      // Get user from request (set during upgrade)
       const user = req.user;
       const userId = user ? `user-${user.id}` : 'anonymous';
 
-      // Attach user information to WebSocket connection for permission checks
       ws.user = user;
 
-      this.logger.info('🔗 Authenticated user connected to document', {
+      this.logger.info('Authenticated user connected to document', {
         connectionId,
         userId: user?.id,
         username: user?.username,
@@ -84,7 +64,6 @@ class WebSocketHandler {
         service: 'websocket-handler'
       });
 
-      // Setup YJS collaborative document connection
       await this.setupYjsConnection(ws, req, {
         connectionId,
         documentId,
@@ -103,12 +82,6 @@ class WebSocketHandler {
     }
   }
 
-  /**
-   * Setup YJS connection for collaborative editing
-   * @param {WebSocket} ws - WebSocket connection
-   * @param {Object} req - HTTP request object
-   * @param {Object} connectionInfo - Connection information
-   */
   async setupYjsConnection(ws, req, connectionInfo) {
     const { connectionId, documentId, userId, user } = connectionInfo;
 
@@ -158,12 +131,7 @@ class WebSocketHandler {
     });
   }
 
-  /**
-   * Handle WebSocket upgrade request
-   * @param {Object} request - HTTP upgrade request
-   * @param {net.Socket} socket - Network socket
-   * @param {Buffer} head - First packet of upgraded stream
-   */
+
   async handleUpgrade(request, socket, head) {
     try {
       this.logger.info(`WebSocket upgrade request - URL: ${request.url}`, {
@@ -190,7 +158,6 @@ class WebSocketHandler {
       request.user = authResult.user;
       request.user.token = authResult.token;
 
-      // Upgrade the connection
       this.wss.handleUpgrade(request, socket, head, (ws) => {
         this.wss.emit('connection', ws, request);
       });
@@ -204,11 +171,6 @@ class WebSocketHandler {
     }
   }
 
-  /**
-   * Get HTTP status text
-   * @param {number} statusCode - HTTP status code
-   * @returns {string} - Status text
-   */
   getStatusText(statusCode) {
     const statusTexts = {
       400: 'Bad Request',
@@ -219,17 +181,10 @@ class WebSocketHandler {
     return statusTexts[statusCode] || 'Unknown';
   }
 
-  /**
-   * Get WebSocket server instance
-   * @returns {WebSocket.Server} - WebSocket server instance
-   */
   getWebSocketServer() {
     return this.wss;
   }
 
-  /**
-   * Close WebSocket server
-   */
   close() {
     if (this.wss) {
       this.wss.close();

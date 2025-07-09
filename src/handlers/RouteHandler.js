@@ -1,10 +1,5 @@
 const express = require('express');
 
-/**
- * RouteHandler
- * Handles all API route definitions
- * Follows Single Responsibility Principle - only handles route definitions
- */
 class RouteHandler {
   constructor(logger, authenticationHandler) {
     this.logger = logger;
@@ -12,22 +7,14 @@ class RouteHandler {
     this.yjsService = null;
   }
 
-  /**
-   * Set YJS service reference
-   * @param {Object} yjsService - YJS service instance
-   */
+
   setYjsService(yjsService) {
     this.yjsService = yjsService;
   }
 
-  /**
-   * Create API router with all routes
-   * @returns {express.Router} - Configured API router
-   */
   createApiRouter() {
     const apiRouter = express.Router();
 
-    // Authentication status endpoint
     apiRouter.get('/auth/status', async (req, res) => {
       try {
         const token = req.headers.authorization;
@@ -57,7 +44,6 @@ class RouteHandler {
       }
     });
 
-    // Get server statistics
     apiRouter.get('/stats', (req, res) => {
       try {
         if (this.yjsService) {
@@ -74,7 +60,6 @@ class RouteHandler {
       }
     });
 
-    // Get document information
     apiRouter.get('/documents/:documentId', (req, res) => {
       try {
         const { documentId } = req.params;
@@ -93,7 +78,6 @@ class RouteHandler {
       }
     });
 
-    // Force document cleanup (admin endpoint)
     apiRouter.delete('/documents/:documentId', (req, res) => {
       try {
         const { documentId } = req.params;
@@ -112,7 +96,6 @@ class RouteHandler {
       }
     });
 
-    // Debug endpoint to see all documents
     apiRouter.get('/debug/documents', (req, res) => {
       try {
         const { docs } = require('../utils/y-websocket-utils');
@@ -142,11 +125,7 @@ class RouteHandler {
     return apiRouter;
   }
 
-  /**
-   * Create health check route
-   * @param {Object} wss - WebSocket server instance
-   * @returns {Function} - Express route handler
-   */
+
   createHealthRoute(wss) {
     return async (req, res) => {
       try {
@@ -157,7 +136,6 @@ class RouteHandler {
           websocket: wss ? 'active' : 'inactive'
         };
 
-        // Add Redis sync health if YJS service is available
         if (this.yjsService && this.yjsService.documentManager && this.yjsService.documentManager.redisSync) {
           const redisHealth = await this.yjsService.documentManager.redisSync.healthCheck();
           health.redisSync = redisHealth;
@@ -177,10 +155,6 @@ class RouteHandler {
     };
   }
 
-  /**
-   * Create deprecated routes handler
-   * @returns {Function} - Express route handler
-   */
   createDeprecatedRoutesHandler() {
     return (req, res) => {
       res.status(404).json({

@@ -1,7 +1,3 @@
-/**
- * Interface for Document Management
- * Follows Interface Segregation Principle - defines only document-related methods
- */
 class IDocumentManager {
   /**
    * Get or create a YJS document
