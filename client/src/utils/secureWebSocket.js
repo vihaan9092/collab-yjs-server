@@ -52,7 +52,6 @@ export function createSecureWebSocket(token) {
           throw new Error('Invalid WebSocket URL')
         }
 
-        // 🔧 BULLETPROOF: Future-proof token encoding
         const encodedToken = encodeTokenForWebSocket(token)
         const authProtocol = `auth.${encodedToken}`
         

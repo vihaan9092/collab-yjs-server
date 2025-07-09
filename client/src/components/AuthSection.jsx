@@ -159,15 +159,6 @@ const AuthSection = ({ onLogin, isLoading, error }) => {
             </>
           )}
         </div>
-
-        <div className="info-section">
-          <h4>How to use:</h4>
-          <ol>
-            <li>Select a test user above, or</li>
-            <li>Paste your own JWT token in the text area</li>
-            <li>Click "Login" to authenticate</li>
-          </ol>
-        </div>
       </div>
     </div>
   )

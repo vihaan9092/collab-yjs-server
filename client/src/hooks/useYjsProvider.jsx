@@ -98,7 +98,7 @@ export const useYjsProvider = (documentId, token, user) => {
       const newDoc = new Y.Doc()
 
       // newDoc.on('update', (update, origin) => {
-      //     console.log('📝 [Y.js] Document changed!', {
+      //     console.log('[Y.js] Document changed!', {
       //       updateSize: update.length,
       //       updateBytes: Array.from(update),
       //       origin: origin,
@@ -131,7 +131,7 @@ export const useYjsProvider = (documentId, token, user) => {
 
           // ADD THIS TO SEE WEBSOCKET MESSAGES:
           // newProvider.ws.addEventListener('message', (event) => {
-          //   console.log('📡 [WebSocket] Received message:', {
+          //   console.log('[WebSocket] Received message:', {
           //     dataSize: event.data.size || event.data.length,
           //     timestamp: new Date().toISOString()
           //   })
@@ -140,7 +140,7 @@ export const useYjsProvider = (documentId, token, user) => {
           // // ADD THIS TO SEE OUTGOING MESSAGES:
           // const originalSend = newProvider.ws.send.bind(newProvider.ws)
           // newProvider.ws.send = function(data) {
-          //   console.log('📤 [WebSocket] Sending message:', {
+          //   console.log('[WebSocket] Sending message:', {
           //     dataSize: data.length,
           //     dataBytes: Array.from(new Uint8Array(data)),
           //     timestamp: new Date().toISOString()
