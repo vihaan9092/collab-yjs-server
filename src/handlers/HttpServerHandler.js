@@ -2,11 +2,6 @@ const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
 
-/**
- * HttpServerHandler
- * Handles Express server setup and HTTP middleware
- * Follows Single Responsibility Principle - only handles HTTP server setup
- */
 class HttpServerHandler {
   constructor(config, logger, routeHandler) {
     this.config = config;
@@ -15,10 +10,6 @@ class HttpServerHandler {
     this.app = express();
   }
 
-  /**
-   * Initialize Express server with middleware and routes
-   * @param {WebSocket.Server} wss - WebSocket server instance for health checks
-   */
   initialize(wss) {
     try {
       this.setupMiddleware();
@@ -36,24 +27,17 @@ class HttpServerHandler {
     }
   }
 
-  /**
-   * Setup Express middleware
-   */
   setupMiddleware() {
-    // Security middleware
     this.app.use(helmet({
-      contentSecurityPolicy: false, // Allow WebSocket connections
+      contentSecurityPolicy: false,
       crossOriginEmbedderPolicy: false
     }));
 
-    // CORS middleware
     this.app.use(cors(this.config.get('cors')));
 
-    // Body parsing middleware
     this.app.use(express.json({ limit: '10mb' }));
     this.app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-    // Request logging middleware
     this.app.use((req, res, next) => {
       this.logger.http(`${req.method} ${req.url}`, {
         ip: req.ip,
@@ -68,18 +52,10 @@ class HttpServerHandler {
     });
   }
 
-  /**
-   * Setup HTTP routes
-   * @param {WebSocket.Server} wss - WebSocket server instance
-   */
   setupRoutes(wss) {
-    // Health check endpoint
     this.app.get('/health', this.routeHandler.createHealthRoute(wss));
-
-    // Block old example routes explicitly
     this.app.get('/examples/*', this.routeHandler.createDeprecatedRoutesHandler());
 
-    // API routes
     const apiRouter = this.routeHandler.createApiRouter();
     this.app.use('/api', apiRouter);
 
@@ -88,11 +64,7 @@ class HttpServerHandler {
     });
   }
 
-  /**
-   * Setup error handling middleware
-   */
   setupErrorHandling() {
-    // 404 handler
     this.app.use((req, res) => {
       res.status(404).json({
         error: 'Not Found',
@@ -108,7 +80,6 @@ class HttpServerHandler {
       });
     });
 
-    // Global error handler
     this.app.use((error, req, res, next) => {
       this.logger.error('Unhandled error in Express', error, {
         url: req.url,
@@ -128,10 +99,6 @@ class HttpServerHandler {
     });
   }
 
-  /**
-   * Get Express app instance
-   * @returns {express.Application} - Express app
-   */
   getApp() {
     return this.app;
   }

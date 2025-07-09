@@ -1,7 +1,3 @@
-/**
- * Server Configuration Class
- * Follows Single Responsibility Principle - handles only configuration management
- */
 class ServerConfig {
   constructor() {
     this.config = {
@@ -19,8 +15,8 @@ class ServerConfig {
       yjs: {
         persistence: process.env.YJS_PERSISTENCE || false,
         gcEnabled: process.env.YJS_GC_ENABLED !== 'false',
-        cleanupInterval: parseInt(process.env.YJS_CLEANUP_INTERVAL) || 300000, // 5 minutes
-        maxIdleTime: parseInt(process.env.YJS_MAX_IDLE_TIME) || 1800000 // 30 minutes
+        cleanupInterval: parseInt(process.env.YJS_CLEANUP_INTERVAL) || 300000,
+        maxIdleTime: parseInt(process.env.YJS_MAX_IDLE_TIME) || 1800000
       },
       websocket: {
         pingTimeout: parseInt(process.env.WS_PING_TIMEOUT) || 30000,
@@ -40,11 +36,11 @@ class ServerConfig {
   validate() {
     const requiredFields = ['port', 'host'];
     const missing = requiredFields.filter(field => !this.config[field]);
-    
+
     if (missing.length > 0) {
       throw new Error(`Missing required configuration fields: ${missing.join(', ')}`);
     }
-    
+
     return true;
   }
 }

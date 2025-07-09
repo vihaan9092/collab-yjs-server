@@ -2,11 +2,6 @@ const AuthMiddleware = require('../middleware/AuthMiddleware');
 const AuthConfig = require('../config/AuthConfig');
 const TokenDecoder = require('../utils/TokenDecoder');
 
-/**
- * AuthenticationHandler
- * Handles all authentication logic for WebSocket connections
- * Follows Single Responsibility Principle - only handles authentication
- */
 class AuthenticationHandler {
   constructor(logger) {
     this.logger = logger;
@@ -17,25 +12,18 @@ class AuthenticationHandler {
     this.tokenDecoder = new TokenDecoder(logger);
   }
 
-  /**
-   * Extract token from WebSocket upgrade request
-   * @param {Object} request - HTTP upgrade request
-   * @returns {string|null} - Extracted token or null
-   */
   extractToken(request) {
-    // Try Authorization header first
     let token = request.headers.authorization;
     if (token && token.startsWith('Bearer ')) {
       return token.substring(7);
     }
 
-    // Try WebSocket subprotocol
     if (request.headers['sec-websocket-protocol']) {
       const protocols = request.headers['sec-websocket-protocol'].split(',').map(p => p.trim());
       const authProtocol = protocols.find(p => p.startsWith('auth.'));
       if (authProtocol) {
         try {
-          const encodedToken = authProtocol.substring(5); // Remove "auth." prefix
+          const encodedToken = authProtocol.substring(5);
           return this.tokenDecoder.decodeTokenFromWebSocket(encodedToken);
         } catch (error) {
           this.logger.error('Failed to decode token from subprotocol', error, {
@@ -50,14 +38,8 @@ class AuthenticationHandler {
     return null;
   }
 
-  /**
-   * Validate token and create user
-   * @param {string} token - JWT token
-   * @returns {Object|null} - User object or null if invalid
-   */
   async validateAndCreateUser(token) {
     try {
-      // Validate token format
       if (!token || token.length < 10) {
         this.logger.warn('Token validation failed: token too short', {
           tokenLength: token?.length || 0,
@@ -66,7 +48,6 @@ class AuthenticationHandler {
         return null;
       }
 
-      // Validate token with middleware
       const userInfo = await this.authMiddleware.validateToken(token);
       if (!userInfo) {
         this.logger.warn('Token validation failed: invalid token', {
@@ -76,7 +57,6 @@ class AuthenticationHandler {
         return null;
       }
 
-      // Create user from JWT
       userInfo.token = token;
       const user = await this.authMiddleware.createUserFromJWT(userInfo);
       if (!user || !user.isActive) {
@@ -96,11 +76,6 @@ class AuthenticationHandler {
     }
   }
 
-  /**
-   * Authenticate WebSocket upgrade request
-   * @param {Object} request - HTTP upgrade request
-   * @returns {Object} - Authentication result with user and token
-   */
   async authenticateWebSocketUpgrade(request) {
     const result = {
       success: false,
@@ -111,9 +86,8 @@ class AuthenticationHandler {
     };
 
     try {
-      // Extract token
       const token = this.extractToken(request);
-      
+
       this.logger.debug('WebSocket authentication attempt', {
         url: request.url,
         hasToken: !!token,
@@ -131,7 +105,6 @@ class AuthenticationHandler {
         return result;
       }
 
-      // Validate and create user
       const user = await this.validateAndCreateUser(token);
       if (!user) {
         result.error = 'Invalid or expired token';
@@ -139,7 +112,6 @@ class AuthenticationHandler {
         return result;
       }
 
-      // Success
       result.success = true;
       result.user = user;
       result.token = token;
@@ -165,10 +137,6 @@ class AuthenticationHandler {
     }
   }
 
-  /**
-   * Get authentication middleware for HTTP routes
-   * @returns {AuthMiddleware} - Authentication middleware instance
-   */
   getAuthMiddleware() {
     return this.authMiddleware;
   }

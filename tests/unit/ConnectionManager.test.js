@@ -1,19 +1,17 @@
 /**
  * ConnectionManager Unit Tests
- * Tests for the improved ConnectionManager with memory leak fixes
+ * Tests for the simplified ConnectionManager
  */
 
 const ConnectionManager = require('../../src/managers/ConnectionManager');
 const { createMockLogger } = require('../helpers/testUtils');
 
-// Mock WebSocket
-class MockWebSocket {
-  constructor() {
-    this.readyState = 1; // OPEN
-    this.close = jest.fn();
-    this.send = jest.fn();
-  }
-}
+// Mock y-websocket-utils docs
+jest.mock('../../src/utils/y-websocket-utils', () => ({
+  docs: new Map()
+}));
+
+const { docs } = require('../../src/utils/y-websocket-utils');
 
 describe('ConnectionManager', () => {
   let connectionManager;
@@ -22,206 +20,95 @@ describe('ConnectionManager', () => {
   beforeEach(() => {
     mockLogger = createMockLogger();
     connectionManager = new ConnectionManager(mockLogger);
-    jest.clearAllMocks();
-    jest.clearAllTimers();
-    jest.useFakeTimers();
+    docs.clear();
   });
 
   afterEach(() => {
     connectionManager.destroy();
-    jest.useRealTimers();
+    docs.clear();
   });
 
-  describe('addConnection', () => {
-    test('should add connection with reverse lookup', () => {
-      const connectionId = 'test-conn-1';
-      const ws = new MockWebSocket();
-      const metadata = { documentId: 'doc1', userId: 'user1' };
+  describe('getConnectionsByDocument', () => {
+    test('should return connections from y-websocket docs', () => {
+      // Mock a document with connections
+      const mockDoc = {
+        conns: new Map()
+      };
+      const mockWs1 = { id: 'ws1' };
+      const mockWs2 = { id: 'ws2' };
 
-      connectionManager.addConnection(connectionId, ws, metadata);
+      mockDoc.conns.set(mockWs1, new Set());
+      mockDoc.conns.set(mockWs2, new Set());
+      docs.set('doc1', mockDoc);
 
-      // Check connection is stored
-      const connection = connectionManager.getConnection(connectionId);
-      expect(connection).toBeDefined();
-      expect(connection.id).toBe(connectionId);
-      expect(connection.ws).toBe(ws);
-      expect(connection.documentId).toBe('doc1');
-      expect(connection.userId).toBe('user1');
-      expect(connection.isActive).toBe(true);
+      const connections = connectionManager.getConnectionsByDocument('doc1');
 
-      // Check reverse lookup works
-      expect(connectionManager.findConnectionIdByWs(ws)).toBe(connectionId);
-
-      // Check document connections tracking (using internal documentConnections map)
-      const docConnectionIds = connectionManager.documentConnections.get('doc1');
-      expect(docConnectionIds).toBeDefined();
-      expect(docConnectionIds.size).toBe(1);
-      expect(docConnectionIds.has(connectionId)).toBe(true);
+      expect(connections).toHaveLength(2);
+      expect(connections[0].documentId).toBe('doc1');
+      expect(connections[1].documentId).toBe('doc1');
     });
 
-    test('should set up connection timeout', () => {
-      const connectionId = 'test-conn-timeout';
-      const ws = new MockWebSocket();
-
-      connectionManager.addConnection(connectionId, ws, {});
-
-      // Check timeout is set
-      expect(connectionManager.connectionTimeouts.has(connectionId)).toBe(true);
+    test('should return empty array for non-existent document', () => {
+      const connections = connectionManager.getConnectionsByDocument('non-existent');
+      expect(connections).toEqual([]);
     });
   });
 
-  describe('removeConnection', () => {
-    test('should remove connection and clean up all references', () => {
-      const connectionId = 'test-conn-remove';
-      const ws = new MockWebSocket();
-      const metadata = { documentId: 'doc1', userId: 'user1' };
+  describe('getConnectionCount', () => {
+    test('should return total connections across all documents', () => {
+      expect(connectionManager.getConnectionCount()).toBe(0);
 
-      // Add connection
-      connectionManager.addConnection(connectionId, ws, metadata);
-      expect(connectionManager.getConnection(connectionId)).toBeDefined();
-      expect(connectionManager.findConnectionIdByWs(ws)).toBe(connectionId);
+      // Mock documents with connections
+      const mockDoc1 = { conns: new Map() };
+      const mockDoc2 = { conns: new Map() };
 
-      // Remove connection
-      const result = connectionManager.removeConnection(connectionId);
-      expect(result).toBe(true);
+      mockDoc1.conns.set({ id: 'ws1' }, new Set());
+      mockDoc1.conns.set({ id: 'ws2' }, new Set());
+      mockDoc2.conns.set({ id: 'ws3' }, new Set());
 
-      // Check all references are cleaned up
-      expect(connectionManager.getConnection(connectionId)).toBeNull();
-      expect(connectionManager.findConnectionIdByWs(ws)).toBeNull();
-      expect(connectionManager.connectionTimeouts.has(connectionId)).toBe(false);
-    });
+      docs.set('doc1', mockDoc1);
+      docs.set('doc2', mockDoc2);
 
-    test('should handle removing non-existent connection', () => {
-      const result = connectionManager.removeConnection('non-existent');
-      expect(result).toBe(false);
+      expect(connectionManager.getConnectionCount()).toBe(3);
     });
   });
 
-  describe('findConnectionIdByWs - Performance Improvement', () => {
-    test('should use O(1) lookup instead of O(n)', () => {
-      const connections = [];
-      const webSockets = [];
+  describe('getConnectionStats', () => {
+    test('should return correct statistics', () => {
+      // Mock documents with connections
+      const mockDoc1 = { conns: new Map() };
+      const mockDoc2 = { conns: new Map() };
 
-      // Add many connections
-      for (let i = 0; i < 1000; i++) {
-        const connectionId = `conn-${i}`;
-        const ws = new MockWebSocket();
-        connectionManager.addConnection(connectionId, ws, {});
-        connections.push(connectionId);
-        webSockets.push(ws);
-      }
+      mockDoc1.conns.set({ id: 'ws1' }, new Set());
+      mockDoc1.conns.set({ id: 'ws2' }, new Set());
+      mockDoc2.conns.set({ id: 'ws3' }, new Set());
 
-      // Test lookup performance - should be instant with O(1)
-      const startTime = process.hrtime.bigint();
-      const foundId = connectionManager.findConnectionIdByWs(webSockets[999]);
-      const endTime = process.hrtime.bigint();
+      docs.set('doc1', mockDoc1);
+      docs.set('doc2', mockDoc2);
 
-      expect(foundId).toBe('conn-999');
-      
-      // Should be very fast (less than 1ms even with 1000 connections)
-      const durationMs = Number(endTime - startTime) / 1000000;
-      expect(durationMs).toBeLessThan(1);
-    });
-  });
+      const stats = connectionManager.getConnectionStats();
 
-  describe('connection timeout handling', () => {
-    test('should timeout inactive connections', () => {
-      const connectionId = 'test-timeout';
-      const ws = new MockWebSocket();
-
-      connectionManager.addConnection(connectionId, ws, {});
-      expect(connectionManager.getConnection(connectionId)).toBeDefined();
-
-      // Fast-forward 30 minutes
-      jest.advanceTimersByTime(30 * 60 * 1000);
-
-      // Connection should be removed
-      expect(connectionManager.getConnection(connectionId)).toBeNull();
-      expect(ws.close).toHaveBeenCalledWith(1000, 'Connection timeout');
+      expect(stats.totalConnections).toBe(3);
+      expect(stats.documentsWithConnections).toBe(2);
+      expect(stats.connectionsByDocument).toEqual({
+        'doc1': 2,
+        'doc2': 1
+      });
     });
 
-    test('should reset timeout on activity', () => {
-      const connectionId = 'test-activity';
-      const ws = new MockWebSocket();
+    test('should return empty stats when no documents', () => {
+      const stats = connectionManager.getConnectionStats();
 
-      connectionManager.addConnection(connectionId, ws, {});
-
-      // Simulate activity after 20 minutes
-      jest.advanceTimersByTime(20 * 60 * 1000);
-      connectionManager.updateLastActivity(connectionId);
-
-      // Fast-forward another 20 minutes (40 minutes total, but only 20 since last activity)
-      jest.advanceTimersByTime(20 * 60 * 1000);
-
-      // Connection should still exist
-      expect(connectionManager.getConnection(connectionId)).toBeDefined();
-      expect(ws.close).not.toHaveBeenCalled();
-
-      // Fast-forward another 15 minutes (35 minutes since last activity)
-      jest.advanceTimersByTime(15 * 60 * 1000);
-
-      // Now connection should be removed
-      expect(connectionManager.getConnection(connectionId)).toBeNull();
-    });
-  });
-
-  describe('cleanupStaleConnections', () => {
-    test('should clean up closed WebSocket connections', () => {
-      const connectionId = 'test-stale';
-      const ws = new MockWebSocket();
-
-      connectionManager.addConnection(connectionId, ws, {});
-      
-      // Simulate WebSocket being closed
-      ws.readyState = 3; // CLOSED
-
-      // Run cleanup
-      connectionManager.cleanupStaleConnections();
-
-      // Connection should be removed
-      expect(connectionManager.getConnection(connectionId)).toBeNull();
-    });
-
-    test('should clean up very old inactive connections', () => {
-      const connectionId = 'test-old';
-      const ws = new MockWebSocket();
-
-      connectionManager.addConnection(connectionId, ws, {});
-      
-      // Manually set old last activity time
-      const connection = connectionManager.getConnection(connectionId);
-      connection.lastActivity = new Date(Date.now() - 3 * 60 * 60 * 1000); // 3 hours ago
-
-      // Run cleanup
-      connectionManager.cleanupStaleConnections();
-
-      // Connection should be removed
-      expect(connectionManager.getConnection(connectionId)).toBeNull();
+      expect(stats.totalConnections).toBe(0);
+      expect(stats.documentsWithConnections).toBe(0);
+      expect(stats.connectionsByDocument).toEqual({});
     });
   });
 
   describe('destroy', () => {
-    test('should clean up all resources', () => {
-      const connectionId1 = 'test-destroy-1';
-      const connectionId2 = 'test-destroy-2';
-      const ws1 = new MockWebSocket();
-      const ws2 = new MockWebSocket();
-
-      connectionManager.addConnection(connectionId1, ws1, {});
-      connectionManager.addConnection(connectionId2, ws2, {});
-
-      expect(connectionManager.getConnectionCount()).toBe(2);
-
+    test('should log destruction', () => {
       connectionManager.destroy();
-
-      // All connections should be closed
-      expect(ws1.close).toHaveBeenCalledWith(1000, 'Server shutdown');
-      expect(ws2.close).toHaveBeenCalledWith(1000, 'Server shutdown');
-
-      // All maps should be cleared
-      expect(connectionManager.connections.size).toBe(0);
-      expect(connectionManager.wsToConnectionId.size).toBe(0);
-      expect(connectionManager.connectionTimeouts.size).toBe(0);
+      expect(mockLogger.info).toHaveBeenCalledWith('ConnectionManager destroyed');
     });
   });
 });
