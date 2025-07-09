@@ -169,7 +169,7 @@ const TiptapEditor = ({ doc, provider, user, isConnected }) => {
   useEffect(() => {
     if (editor && isConnected) {
       // Connection established, editor ready for collaboration
-      // Could add connection status indicator here if needed
+      // Do whatever you wanna do when editor is connected
     }
   }, [editor, isConnected])
 

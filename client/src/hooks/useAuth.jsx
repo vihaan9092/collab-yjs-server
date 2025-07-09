@@ -111,8 +111,6 @@ export const useAuth = () => {
     Debug.auth('Logout successful - WebSocket connections will be cleaned up');
   }, [])
 
-  // Removed contaminated data cleanup - no longer needed
-
   return {
     token,
     user,
