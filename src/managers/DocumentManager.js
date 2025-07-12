@@ -1,6 +1,11 @@
 const IDocumentManager = require('../interfaces/IDocumentManager');
 const { getYDoc, docs, getDocumentStateSize, applyUpdateToDoc } = require('../utils/y-websocket-utils');
 const RedisDocumentSync = require('../services/RedisDocumentSync');
+const DocumentChunker = require('../optimizations/DocumentChunker');
+const MemoryManager = require('../optimizations/MemoryManager');
+const ConnectionPool = require('../optimizations/ConnectionPool');
+const PerformanceMonitor = require('../optimizations/PerformanceMonitor');
+const { getOptimizedDebounceConfig } = require('../config/debounceConfig');
 
 class DocumentManager extends IDocumentManager {
   constructor(logger, config = {}) {
@@ -17,10 +22,103 @@ class DocumentManager extends IDocumentManager {
 
     this.syncedDocuments = new Set();
 
+    // Initialize optimization components (with feature flags)
+    const optimizationsEnabled = process.env.ENABLE_OPTIMIZATIONS !== 'false';
+
+    this.documentChunker = new DocumentChunker(logger, {
+      chunkSize: config.chunkSize || 64 * 1024,
+      compressionEnabled: config.compressionEnabled !== false
+    });
+
+    // Only enable memory-intensive components if explicitly enabled
+    if (optimizationsEnabled) {
+      this.memoryManager = new MemoryManager(logger, {
+        maxMemoryUsage: config.maxMemoryUsage || 1024 * 1024 * 1024, // Increase to 1GB
+        documentCacheSize: config.documentCacheSize || 50, // Reduce cache size
+        gcInterval: config.gcInterval || 60000, // Increase interval to 1 minute
+        gcThreshold: 0.95 // Only cleanup at 95% usage
+      });
+
+      this.connectionPool = new ConnectionPool(logger, {
+        maxConnectionsPerDocument: config.maxConnectionsPerDocument || 50,
+        maxTotalConnections: config.maxTotalConnections || 1000
+      });
+
+      this.performanceMonitor = new PerformanceMonitor(logger, {
+        metricsInterval: config.metricsInterval || 60000, // Reduce frequency
+        alertThresholds: {
+          memoryUsage: 0.95, // Only alert at 95%
+          ...config.alertThresholds
+        }
+      });
+
+      // Setup event listeners
+      this.setupOptimizationListeners();
+
+      this.logger.info('Performance optimizations enabled', {
+        memoryLimit: `${(config.maxMemoryUsage || 1024 * 1024 * 1024) / 1024 / 1024}MB`,
+        cacheSize: config.documentCacheSize || 50
+      });
+    } else {
+      this.logger.info('Performance optimizations disabled');
+    }
+
     if (config.cleanupInterval) {
-      this.cleanupInterval = setInterval(() => {
-        this.cleanup();
+      this.logger.info('Document cleanup scheduled', {
+        intervalMs: config.cleanupInterval,
+        maxIdleTimeMs: config.maxIdleTime || 30 * 60 * 1000
+      });
+      this.cleanupInterval = setInterval(async () => {
+        try {
+          await this.cleanup();
+        } catch (error) {
+          this.logger.error('Scheduled cleanup failed, continuing operation', error);
+          // Don't throw - just log and continue
+        }
       }, config.cleanupInterval);
+    } else {
+      this.logger.warn('Document cleanup not scheduled - cleanupInterval not configured');
+    }
+  }
+
+  /**
+   * Setup optimization event listeners
+   */
+  setupOptimizationListeners() {
+    // Memory management alerts (only if enabled)
+    if (this.memoryManager) {
+      this.memoryManager.on('memoryStats', (stats) => {
+        if (stats.usagePercent > 0.9) { // Only warn at 90%+
+          this.logger.warn('High memory usage detected', {
+            usagePercent: `${(stats.usagePercent * 100).toFixed(2)}%`,
+            heapUsed: `${(stats.heapUsed / 1024 / 1024).toFixed(2)}MB`
+          });
+        }
+      });
+    }
+
+    // Performance monitoring alerts (only if enabled)
+    if (this.performanceMonitor) {
+      this.performanceMonitor.on('alert', (alert) => {
+        this.logger.warn('Performance alert', alert);
+      });
+    }
+
+    // Connection pool events (only if enabled)
+    if (this.connectionPool && this.performanceMonitor) {
+      this.connectionPool.on('connectionAdded', (connection) => {
+        this.performanceMonitor.trackConnectionPerformance(connection.id, {
+          connectedAt: connection.connectedAt,
+          documentId: connection.documentId
+        });
+      });
+
+      this.connectionPool.on('connectionRemoved', (connection) => {
+        this.performanceMonitor.trackConnectionPerformance(connection.id, {
+          disconnectedAt: Date.now(),
+          duration: Date.now() - connection.connectedAt
+        });
+      });
     }
   }
 
@@ -138,17 +236,78 @@ class DocumentManager extends IDocumentManager {
    * @param {any} origin - Update origin
    */
   async broadcastUpdate(documentId, update, origin) {
+    const startTime = Date.now();
+
     try {
-      await this.redisSync.broadcastUpdate(documentId, update, origin, {
+      // Get connection count for optimization (only if connection pool is enabled)
+      const connectionCount = this.connectionPool ?
+        this.connectionPool.getDocumentConnections(documentId).length : 0;
+
+      // Optimize update for large documents (only if chunker is available)
+      let optimizedUpdate = update;
+      if (this.documentChunker && update.length > 64 * 1024) { // 64KB threshold
+        // Use chunking for large updates
+        const chunks = this.documentChunker.chunkUpdate(update);
+
+        if (chunks.length > 1) {
+          // Broadcast chunks separately
+          for (let i = 0; i < chunks.length; i++) {
+            await this.redisSync.broadcastUpdate(documentId, chunks[i], origin, {
+              timestamp: Date.now(),
+              size: chunks[i].length,
+              chunkIndex: i,
+              totalChunks: chunks.length,
+              isChunked: true
+            });
+          }
+
+          this.logger.debug('Large update chunked and broadcasted', {
+            documentId,
+            originalSize: update.length,
+            chunkCount: chunks.length,
+            connectionCount
+          });
+
+          // Track performance (only if monitor is enabled)
+          if (this.performanceMonitor) {
+            this.performanceMonitor.trackDocumentPerformance(documentId, {
+              updateLatency: Date.now() - startTime,
+              updateSize: update.length,
+              connectionCount,
+              wasChunked: true
+            });
+          }
+
+          return;
+        }
+      }
+
+      // Regular broadcast for smaller updates
+      await this.redisSync.broadcastUpdate(documentId, optimizedUpdate, origin, {
         timestamp: Date.now(),
-        size: update.length
+        size: optimizedUpdate.length,
+        connectionCount
       });
+
+      const latency = Date.now() - startTime;
 
       this.logger.debug('Local update broadcasted', {
         documentId,
-        updateSize: update.length,
+        updateSize: optimizedUpdate.length,
+        latency: `${latency}ms`,
+        connectionCount,
         origin
       });
+
+      // Track performance (only if monitor is enabled)
+      if (this.performanceMonitor) {
+        this.performanceMonitor.trackDocumentPerformance(documentId, {
+          updateLatency: latency,
+          updateSize: optimizedUpdate.length,
+          connectionCount,
+          wasChunked: false
+        });
+      }
 
     } catch (error) {
       this.logger.error('Failed to broadcast update', error, {
@@ -156,6 +315,14 @@ class DocumentManager extends IDocumentManager {
         updateSize: update ? update.length : 0,
         origin
       });
+
+      // Track error (only if monitor is enabled)
+      if (this.performanceMonitor) {
+        this.performanceMonitor.recordError('broadcast', error, {
+          documentId,
+          updateSize: update ? update.length : 0
+        });
+      }
     }
   }
 
@@ -169,7 +336,11 @@ class DocumentManager extends IDocumentManager {
 
       // Only remove if no active connections
       if (doc.conns.size > 0) {
-        throw new Error('Cannot remove document with active connections');
+        this.logger.warn('Cannot remove document with active connections', {
+          documentId,
+          activeConnections: doc.conns.size
+        });
+        return false;
       }
 
       // Cleanup Redis sync
@@ -224,23 +395,64 @@ class DocumentManager extends IDocumentManager {
       const maxIdleTime = this.config.maxIdleTime || 30 * 60 * 1000; // 30 minutes default
       let cleanedCount = 0;
 
+      // Log memory usage before cleanup
+      const memBefore = process.memoryUsage();
+
+      this.logger.info('Starting document cleanup', {
+        totalDocuments: this.documentStats.size,
+        syncedDocuments: this.syncedDocuments.size,
+        maxIdleTimeMs: maxIdleTime,
+        memoryBeforeCleanup: `${(memBefore.heapUsed / 1024 / 1024).toFixed(2)}MB`
+      });
+
       const cleanupPromises = [];
       this.documentStats.forEach((stats, documentId) => {
         const idleTime = now - stats.lastAccessed;
         if (idleTime > maxIdleTime && stats.connectionCount === 0) {
-          cleanupPromises.push(this.removeDocument(documentId));
+          this.logger.debug('Scheduling document for cleanup', {
+            documentId,
+            idleTimeMs: idleTime,
+            connectionCount: stats.connectionCount
+          });
+
+          // Wrap removeDocument in a promise that handles errors gracefully
+          const cleanupPromise = this.removeDocument(documentId)
+            .then(() => {
+              this.logger.debug('Document cleaned up successfully', { documentId });
+              return true;
+            })
+            .catch((error) => {
+              this.logger.warn('Failed to cleanup document, skipping', {
+                documentId,
+                error: error.message,
+                connectionCount: stats.connectionCount
+              });
+              return false;
+            });
+
+          cleanupPromises.push(cleanupPromise);
           cleanedCount++;
         }
       });
 
       // Wait for all cleanup operations to complete
-      await Promise.all(cleanupPromises);
+      const results = await Promise.all(cleanupPromises);
+      const actualCleanedCount = results.filter(result => result === true).length;
 
-      if (cleanedCount > 0) {
-        this.logger.info('Document cleanup completed', { cleanedCount });
-      }
+      // Log memory usage after cleanup
+      const memAfter = process.memoryUsage();
+      const memoryFreed = (memBefore.heapUsed - memAfter.heapUsed) / 1024 / 1024;
 
-      return cleanedCount;
+      this.logger.info('Document cleanup completed', {
+        scheduledForCleanup: cleanedCount,
+        actuallyCleanedCount: actualCleanedCount,
+        skippedCount: cleanedCount - actualCleanedCount,
+        documentsRemaining: this.documentStats.size,
+        memoryAfterCleanup: `${(memAfter.heapUsed / 1024 / 1024).toFixed(2)}MB`,
+        memoryFreed: `${memoryFreed.toFixed(2)}MB`
+      });
+
+      return actualCleanedCount;
     } catch (error) {
       this.logger.error('Document cleanup failed', error);
       throw error;

@@ -26,7 +26,6 @@
                 "NODE_ENV": "development",
                 "REDIS_URL": "redis://localhost:6379",
                 "JWT_SECRET": "your-super-secret-jwt-key-change-in-production",
-                "DJANGO_API_URL": "http://localhost:8000",
                 "AUTH_TEST_MODE": "false",
                 "DEBOUNCE_ENABLED": "true",
                 "DEBOUNCE_DELAY": "300",

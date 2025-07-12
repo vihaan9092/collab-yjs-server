@@ -10,12 +10,7 @@ const AuthConfig = {
 
     redis: {
         url: process.env.REDIS_URL || 'redis://localhost:6379',
-        keyPrefix: process.env.REDIS_KEY_PREFIX || 'collab:',
-        ttl: {
-            userSession: parseInt(process.env.REDIS_USER_TTL) || 900,
-            documentAccess: parseInt(process.env.REDIS_ACCESS_TTL) || 300,
-            tokenBlacklist: parseInt(process.env.REDIS_BLACKLIST_TTL) || 86400
-        }
+        keyPrefix: process.env.REDIS_KEY_PREFIX || 'collab:'
     },
 
     documentAccess: {

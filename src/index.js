@@ -104,6 +104,15 @@ class RealtimeYjsServer {
 
     process.on('unhandledRejection', (reason, promise) => {
       this.logger.error('Unhandled Rejection', reason, { promise });
+
+      // Don't shutdown for cleanup-related errors - just log them
+      if (reason && reason.message && reason.message.includes('Cannot remove document with active connections')) {
+        this.logger.warn('Cleanup error detected, continuing operation', { reason: reason.message });
+        return;
+      }
+
+      // For other critical errors, still shutdown
+      this.logger.error('Critical unhandled rejection, initiating shutdown');
       shutdownHandler('unhandledRejection');
     });
   }

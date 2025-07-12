@@ -11,15 +11,30 @@ const getDebounceConfig = () => {
   const config = {
     // Enable/disable debouncing
     enabled: process.env.DEBOUNCE_ENABLED !== 'false',
-    
+
     // Debounce delay in milliseconds (default: 300ms)
     delay: parseInt(process.env.DEBOUNCE_DELAY) || 300,
-    
+
     // Maximum delay before forcing send (default: 1000ms)
     maxDelay: parseInt(process.env.DEBOUNCE_MAX_DELAY) || 1000,
-    
+
     // Minimum delay to prevent too frequent updates (default: 50ms)
     minDelay: parseInt(process.env.DEBOUNCE_MIN_DELAY) || 50,
+
+    // Large document optimizations
+    largeDocumentThreshold: parseInt(process.env.LARGE_DOC_THRESHOLD) || 1024 * 1024, // 1MB
+    largeDocumentDelay: parseInt(process.env.LARGE_DOC_DELAY) || 500, // 500ms for large docs
+    largeDocumentMaxDelay: parseInt(process.env.LARGE_DOC_MAX_DELAY) || 2000, // 2s max for large docs
+
+    // Batch processing
+    batchEnabled: process.env.BATCH_ENABLED !== 'false',
+    batchSize: parseInt(process.env.BATCH_SIZE) || 10, // Max updates per batch
+    batchTimeout: parseInt(process.env.BATCH_TIMEOUT) || 100, // 100ms batch window
+
+    // Connection-based scaling
+    connectionScaling: process.env.CONNECTION_SCALING !== 'false',
+    baseConnectionCount: parseInt(process.env.BASE_CONNECTION_COUNT) || 5,
+    scalingFactor: parseFloat(process.env.SCALING_FACTOR) || 1.2,
   };
 
   // Validation
@@ -31,7 +46,50 @@ const getDebounceConfig = () => {
     config.maxDelay = config.delay * 3;
   }
 
+  if (config.largeDocumentDelay < config.delay) {
+    config.largeDocumentDelay = config.delay * 1.5;
+  }
+
   return config;
+};
+
+/**
+ * Get optimized debounce settings based on document size and connection count
+ * @param {number} documentSize - Document size in bytes
+ * @param {number} connectionCount - Number of active connections
+ * @returns {Object} Optimized debounce configuration
+ */
+const getOptimizedDebounceConfig = (documentSize = 0, connectionCount = 1) => {
+  const baseConfig = getDebounceConfig();
+
+  if (!baseConfig.enabled) {
+    return baseConfig;
+  }
+
+  let optimizedConfig = { ...baseConfig };
+
+  // Adjust for large documents
+  if (documentSize > baseConfig.largeDocumentThreshold) {
+    optimizedConfig.delay = baseConfig.largeDocumentDelay;
+    optimizedConfig.maxDelay = baseConfig.largeDocumentMaxDelay;
+  }
+
+  // Adjust for connection count
+  if (baseConfig.connectionScaling && connectionCount > baseConfig.baseConnectionCount) {
+    const scalingMultiplier = Math.pow(baseConfig.scalingFactor,
+      Math.log(connectionCount / baseConfig.baseConnectionCount));
+
+    optimizedConfig.delay = Math.min(
+      optimizedConfig.delay * scalingMultiplier,
+      optimizedConfig.maxDelay * 0.8
+    );
+  }
+
+  // Ensure bounds
+  optimizedConfig.delay = Math.max(optimizedConfig.minDelay,
+    Math.min(optimizedConfig.delay, optimizedConfig.maxDelay));
+
+  return optimizedConfig;
 };
 
 
@@ -72,5 +130,6 @@ const logDebounceConfig = (config, logger) => {
 
 module.exports = {
   getDebounceConfig,
+  getOptimizedDebounceConfig,
   logDebounceConfig
 };
