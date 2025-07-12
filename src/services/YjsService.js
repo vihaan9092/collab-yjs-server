@@ -95,23 +95,31 @@ class YjsService {
     try {
       this.logger.info('YJS Service shutting down...');
 
-      // Notify all connected clients via WebSocket
-      const allConnections = Array.from(this.connectionManager.connections.values());
-      allConnections.forEach(connection => {
-        if (connection.ws && connection.ws.readyState === 1) { // WebSocket.OPEN
-          try {
-            connection.ws.send(JSON.stringify({
-              type: 'server-shutdown',
-              message: 'Server is shutting down',
-              timestamp: new Date().toISOString()
-            }));
-          } catch (error) {
-            this.logger.warn('Failed to notify client of shutdown', error, {
-              connectionId: connection.id
-            });
-          }
+      // Notify all connected clients via WebSocket (if connectionManager exists)
+      if (this.connectionManager && this.connectionManager.connections) {
+        try {
+          const allConnections = Array.from(this.connectionManager.connections.values());
+          allConnections.forEach(connection => {
+            if (connection.ws && connection.ws.readyState === 1) { // WebSocket.OPEN
+              try {
+                connection.ws.send(JSON.stringify({
+                  type: 'server-shutdown',
+                  message: 'Server is shutting down',
+                  timestamp: new Date().toISOString()
+                }));
+              } catch (error) {
+                this.logger.warn('Failed to notify client of shutdown', error, {
+                  connectionId: connection.id
+                });
+              }
+            }
+          });
+        } catch (error) {
+          this.logger.warn('Failed to access connections during shutdown', error);
         }
-      });
+      } else {
+        this.logger.warn('ConnectionManager not available during shutdown');
+      }
 
       // Give clients time to handle shutdown notification
       await new Promise(resolve => setTimeout(resolve, 1000));

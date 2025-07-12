@@ -17,18 +17,19 @@ class RedisDocumentSync {
     this.keyPrefix = config.keyPrefix || 'collab:';
     
     // Initialize Redis clients
+    // Note: keyPrefix should NOT be used for pub/sub operations
     this.publisher = new Redis(this.redisUrl, {
       retryDelayOnFailover: 100,
       maxRetriesPerRequest: 3,
-      lazyConnect: true,
-      keyPrefix: this.keyPrefix
+      lazyConnect: true
+      // No keyPrefix for pub/sub operations
     });
-    
+
     this.subscriber = new Redis(this.redisUrl, {
       retryDelayOnFailover: 100,
       maxRetriesPerRequest: 3,
-      lazyConnect: true,
-      keyPrefix: this.keyPrefix
+      lazyConnect: true
+      // No keyPrefix for pub/sub operations
     });
     
     // Track subscriptions and handlers
@@ -106,11 +107,12 @@ class RedisDocumentSync {
       
       this.metrics.messagesSent++;
       this.metrics.lastActivity = new Date();
-      
-      this.logger.debug('Document update broadcasted', {
+
+      this.logger.info('Redis pub/sub message sent', {
         documentId,
         updateSize: update.length,
         channel,
+        totalMessagesSent: this.metrics.messagesSent,
         instanceId: this.instanceId,
         messageId: message.messageId
       });
@@ -211,9 +213,21 @@ class RedisDocumentSync {
   handleIncomingMessage(channel, message) {
     try {
       const data = JSON.parse(message);
-      
+
+      this.logger.debug('Redis message received', {
+        channel,
+        sourceInstance: data.instanceId,
+        currentInstance: this.instanceId,
+        documentId: data.documentId,
+        messageId: data.messageId
+      });
+
       // Ignore messages from this instance
       if (data.instanceId === this.instanceId) {
+        this.logger.debug('Ignoring message from same instance', {
+          instanceId: this.instanceId,
+          messageId: data.messageId
+        });
         return;
       }
       
@@ -270,7 +284,8 @@ class RedisDocumentSync {
    * @returns {string} Channel name
    */
   getChannelName(documentId, operation) {
-    return `doc:${documentId}:${operation}`;
+    // Include prefix manually since pub/sub doesn't use keyPrefix
+    return `${this.keyPrefix}doc:${documentId}:${operation}`;
   }
   
   /**

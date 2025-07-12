@@ -122,6 +122,44 @@ class RouteHandler {
       }
     });
 
+    // Cleanup endpoint for stale documents
+    apiRouter.post('/cleanup/documents', async (req, res) => {
+      try {
+        const { docs } = require('../utils/y-websocket-utils');
+        const cleaned = [];
+
+        // Find documents with no connections
+        docs.forEach((doc, documentId) => {
+          if (doc.conns.size === 0) {
+            // Clean up Redis subscriptions if available
+            if (this.yjsService && this.yjsService.documentManager && this.yjsService.documentManager.redisSync) {
+              this.yjsService.documentManager.redisSync.unsubscribeFromDocument(documentId);
+            }
+
+            // Remove from docs map
+            docs.delete(documentId);
+            cleaned.push(documentId);
+
+            this.logger.info('Cleaned up stale document', {
+              documentId,
+              service: 'route-handler'
+            });
+          }
+        });
+
+        res.json({
+          success: true,
+          cleanedDocuments: cleaned.length,
+          documentIds: cleaned
+        });
+      } catch (error) {
+        this.logger.error('Failed to cleanup documents', error, {
+          service: 'route-handler'
+        });
+        res.status(500).json({ error: 'Internal server error' });
+      }
+    });
+
     return apiRouter;
   }
 
