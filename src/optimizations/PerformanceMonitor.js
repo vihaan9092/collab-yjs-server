@@ -47,18 +47,71 @@ class PerformanceMonitor extends EventEmitter {
    * Start performance monitoring
    */
   startMonitoring() {
-    // Collect metrics periodically
-    setInterval(() => {
-      this.collectSystemMetrics();
-      this.collectPerformanceMetrics();
-      this.checkAlerts();
-      this.cleanupOldMetrics();
-    }, this.config.metricsInterval);
+    // Start with idle monitoring (less frequent)
+    this.startIdleMonitoring();
 
     this.logger.info('Performance monitoring started', {
-      interval: this.config.metricsInterval,
+      interval: this.config.metricsInterval * 3, // Start in idle mode
       thresholds: this.config.alertThresholds
     });
+  }
+
+  /**
+   * Start idle monitoring (less frequent when no activity)
+   */
+  startIdleMonitoring() {
+    this.monitoringInterval = setInterval(() => {
+      try {
+        this.collectSystemMetrics();
+        this.collectPerformanceMetrics();
+        this.checkAlerts();
+        this.cleanupOldMetrics();
+      } catch (error) {
+        this.logger.error('Performance monitoring cycle failed', error);
+      }
+    }, this.config.metricsInterval * 3); // 3x less frequent when idle (90 seconds)
+  }
+
+  /**
+   * Start active monitoring (more frequent when there's activity)
+   */
+  startActiveMonitoring() {
+    if (this.monitoringInterval) {
+      clearInterval(this.monitoringInterval);
+    }
+
+    this.monitoringInterval = setInterval(() => {
+      try {
+        this.collectSystemMetrics();
+        this.collectPerformanceMetrics();
+        this.checkAlerts();
+        this.cleanupOldMetrics();
+      } catch (error) {
+        this.logger.error('Performance monitoring cycle failed', error);
+      }
+    }, this.config.metricsInterval); // Normal frequency (30 seconds)
+  }
+
+  /**
+   * Switch to idle monitoring when no activity
+   */
+  switchToIdleMode() {
+    if (this.monitoringInterval) {
+      clearInterval(this.monitoringInterval);
+    }
+    this.startIdleMonitoring();
+    this.logger.debug('Switched to idle performance monitoring');
+  }
+
+  /**
+   * Switch to active monitoring when activity detected
+   */
+  switchToActiveMode() {
+    if (this.monitoringInterval) {
+      clearInterval(this.monitoringInterval);
+    }
+    this.startActiveMonitoring();
+    this.logger.debug('Switched to active performance monitoring');
   }
 
   /**
@@ -388,15 +441,10 @@ class PerformanceMonitor extends EventEmitter {
     };
   }
 
-  /**
-   * Get optimization recommendations
-   * @returns {Array} Array of optimization recommendations
-   */
   getOptimizationRecommendations() {
     const recommendations = [];
     const summary = this.getPerformanceSummary();
 
-    // Memory recommendations
     if (summary.system.memory.current) {
       const memUsage = summary.system.memory.current.heapUsed / summary.system.memory.current.heapTotal;
       if (memUsage > 0.7) {
@@ -409,7 +457,6 @@ class PerformanceMonitor extends EventEmitter {
       }
     }
 
-    // Latency recommendations
     if (summary.performance.latency.average > 500) {
       recommendations.push({
         type: 'latency',
@@ -419,7 +466,6 @@ class PerformanceMonitor extends EventEmitter {
       });
     }
 
-    // Connection recommendations
     if (summary.system.connections.active > 50) {
       recommendations.push({
         type: 'connections',
@@ -436,6 +482,12 @@ class PerformanceMonitor extends EventEmitter {
    * Destroy the performance monitor
    */
   destroy() {
+    // Clear monitoring interval
+    if (this.monitoringInterval) {
+      clearInterval(this.monitoringInterval);
+      this.monitoringInterval = null;
+    }
+
     this.metrics.documents.clear();
     this.metrics.connections.clear();
     this.alerts = [];

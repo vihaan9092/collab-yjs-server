@@ -1,3 +1,5 @@
+const { setDocumentManager } = require('../utils/y-websocket-utils');
+
 class YjsService {
   constructor(connectionManager, documentManager, logger) {
     this.connectionManager = connectionManager;
@@ -7,6 +9,9 @@ class YjsService {
 
   async initialize() {
     this.logger.info('YJS Service initializing...');
+    setDocumentManager(this.documentManager);
+    this.logger.info('Document manager connected to Y.js WebSocket utilities');
+
     this.setupPeriodicCleanup();
     this.logger.info('YJS Service initialized successfully');
   }
@@ -21,7 +26,8 @@ class YjsService {
           this.logger.info('Periodic cleanup completed', { cleanedCount });
         }
       } catch (error) {
-        this.logger.error('Periodic cleanup failed', error);
+        this.logger.error('Periodic cleanup failed, continuing operation', error);
+        // Don't throw - just log and continue periodic cleanup
       }
     }, cleanupInterval);
   }
@@ -42,9 +48,6 @@ class YjsService {
     }
   }
 
-  /**
-   * Get detailed document information
-   */
   getDocumentInfo(documentId) {
     try {
       const documentStats = this.documentManager.getDocumentStats(documentId);
@@ -66,9 +69,6 @@ class YjsService {
     }
   }
 
-  /**
-   * Force cleanup of a specific document
-   */
   cleanupDocument(documentId) {
     try {
       const connections = this.connectionManager.getConnectionsByDocument(documentId);
@@ -94,6 +94,19 @@ class YjsService {
   async shutdown() {
     try {
       this.logger.info('YJS Service shutting down...');
+
+      if (this.cleanupInterval) {
+        clearInterval(this.cleanupInterval);
+        this.cleanupInterval = null;
+      }
+
+      if (this.documentManager) {
+        await this.documentManager.destroy();
+      }
+
+      if (this.connectionManager) {
+        this.connectionManager.destroy();
+      }
 
       // Notify all connected clients via WebSocket (if connectionManager exists)
       if (this.connectionManager && this.connectionManager.connections) {

@@ -1,23 +1,15 @@
-/**
- * Document Chunking Service for Large Document Optimization
- * Handles splitting large documents into manageable chunks for better performance
- */
+
 
 const Y = require('yjs');
 
 class DocumentChunker {
   constructor(logger, config = {}) {
     this.logger = logger;
-    this.chunkSize = config.chunkSize || 64 * 1024; // 64KB chunks
-    this.maxChunkSize = config.maxChunkSize || 256 * 1024; // 256KB max
+    this.chunkSize = config.chunkSize || 64 * 1024;
+    this.maxChunkSize = config.maxChunkSize || 256 * 1024;
     this.compressionEnabled = config.compressionEnabled !== false;
   }
 
-  /**
-   * Split large document updates into smaller chunks
-   * @param {Uint8Array} update - Large YJS update
-   * @returns {Array<Uint8Array>} Array of chunked updates
-   */
   chunkUpdate(update) {
     if (update.length <= this.chunkSize) {
       return [update];
@@ -42,12 +34,6 @@ class DocumentChunker {
     return chunks;
   }
 
-  /**
-   * Create incremental updates for large documents
-   * @param {Y.Doc} doc - YJS document
-   * @param {Uint8Array} lastState - Previous document state
-   * @returns {Uint8Array} Incremental update
-   */
   createIncrementalUpdate(doc, lastState) {
     try {
       if (!lastState) {
@@ -70,11 +56,6 @@ class DocumentChunker {
     }
   }
 
-  /**
-   * Compress document state for storage/transmission
-   * @param {Uint8Array} data - Document data
-   * @returns {Uint8Array} Compressed data
-   */
   async compressData(data) {
     if (!this.compressionEnabled || data.length < 1024) {
       return data;
@@ -100,11 +81,6 @@ class DocumentChunker {
     }
   }
 
-  /**
-   * Decompress document state
-   * @param {Uint8Array} compressedData - Compressed data
-   * @returns {Uint8Array} Decompressed data
-   */
   async decompressData(compressedData) {
     if (!this.compressionEnabled) {
       return compressedData;

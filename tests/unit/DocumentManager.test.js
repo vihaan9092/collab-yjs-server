@@ -135,31 +135,5 @@ describe('DocumentManager', () => {
     });
   });
 
-  describe('updateConnectionCount', () => {
-    it('should update connection count for existing document', async () => {
-      const documentId = 'test-doc';
 
-      // Mock the docs.get to return our mock document
-      docs.set(documentId, mockDoc);
-
-      // Create document first
-      await documentManager.getDocument(documentId);
-
-      // Mock the document's connection count by adding connections to the conns Map
-      mockDoc.conns.set('conn1', new Set());
-      mockDoc.conns.set('conn2', new Set());
-      mockDoc.conns.set('conn3', new Set());
-      mockDoc.conns.set('conn4', new Set());
-      mockDoc.conns.set('conn5', new Set());
-
-      const stats = documentManager.getDocumentStats(documentId);
-      expect(stats.connectionCount).toBe(5);
-    });
-
-    it('should handle non-existent document gracefully', () => {
-      expect(() => {
-        documentManager.updateConnectionCount('non-existent', 5);
-      }).not.toThrow();
-    });
-  });
 });

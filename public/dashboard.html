@@ -1,0 +1,709 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Y.js Collaborative Server Dashboard</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: #333;
+        }
+
+        .dashboard {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .header {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 16px;
+            padding: 24px;
+            margin-bottom: 24px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+        }
+
+        .header h1 {
+            color: #2d3748;
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin-bottom: 8px;
+        }
+
+        .header .subtitle {
+            color: #718096;
+            font-size: 1.1rem;
+        }
+
+        .status-indicator {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+
+        .status-healthy { background: #48bb78; }
+        .status-warning { background: #ed8936; }
+        .status-critical { background: #f56565; }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 24px;
+            margin-bottom: 24px;
+        }
+
+        .card {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 16px;
+            padding: 24px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        .card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 12px 40px rgba(0, 0, 0, 0.15);
+        }
+
+        .card-title {
+            font-size: 1.25rem;
+            font-weight: 600;
+            color: #2d3748;
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+        }
+
+        .card-icon {
+            width: 24px;
+            height: 24px;
+            margin-right: 12px;
+            opacity: 0.7;
+        }
+
+        .metric {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 0;
+            border-bottom: 1px solid #e2e8f0;
+        }
+
+        .metric:last-child {
+            border-bottom: none;
+        }
+
+        .metric-label {
+            color: #4a5568;
+            font-weight: 500;
+        }
+
+        .metric-value {
+            font-weight: 700;
+            color: #2d3748;
+        }
+
+        .metric-value.large {
+            font-size: 2rem;
+            color: #667eea;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 8px;
+            background: #e2e8f0;
+            border-radius: 4px;
+            overflow: hidden;
+            margin-top: 8px;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #48bb78, #38a169);
+            transition: width 0.3s ease;
+        }
+
+        .progress-fill.warning {
+            background: linear-gradient(90deg, #ed8936, #dd6b20);
+        }
+
+        .progress-fill.critical {
+            background: linear-gradient(90deg, #f56565, #e53e3e);
+        }
+
+        .document-list {
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        .document-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px;
+            margin: 8px 0;
+            background: #f7fafc;
+            border-radius: 8px;
+            border-left: 4px solid #667eea;
+        }
+
+        .document-item.active {
+            border-left-color: #48bb78;
+            background: #f0fff4;
+        }
+
+        .document-info {
+            flex: 1;
+        }
+
+        .document-name {
+            font-weight: 600;
+            color: #2d3748;
+            margin-bottom: 4px;
+        }
+
+        .document-meta {
+            font-size: 0.875rem;
+            color: #718096;
+        }
+
+        .document-stats {
+            text-align: right;
+        }
+
+        .connection-count {
+            background: #667eea;
+            color: white;
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+
+        .refresh-btn {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s ease;
+        }
+
+        .refresh-btn:hover {
+            transform: scale(1.05);
+        }
+
+        .auto-refresh {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-top: 16px;
+        }
+
+        .loading {
+            opacity: 0.6;
+            pointer-events: none;
+        }
+
+        .error {
+            background: #fed7d7;
+            color: #c53030;
+            padding: 12px;
+            border-radius: 8px;
+            margin: 16px 0;
+        }
+
+        @media (max-width: 768px) {
+            .grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .header h1 {
+                font-size: 2rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="dashboard">
+        <div class="header">
+            <h1>🚀 Y.js Collaborative Server</h1>
+            <p class="subtitle">Real-time monitoring dashboard for collaborative document server</p>
+            <div class="auto-refresh">
+                <label>
+                    <input type="checkbox" id="autoRefresh" checked> Auto-refresh (5s)
+                </label>
+                <button class="refresh-btn" onclick="refreshDashboard()">🔄 Refresh Now</button>
+            </div>
+        </div>
+
+        <div id="error-container"></div>
+
+        <div class="grid">
+            <!-- System Health Card -->
+            <div class="card">
+                <div class="card-title">
+                    <span class="card-icon">💚</span>
+                    System Health
+                </div>
+                <div id="health-content">
+                    <div class="metric">
+                        <span class="metric-label">Status</span>
+                        <span class="metric-value" id="system-status">Loading...</span>
+                    </div>
+                    <div class="metric">
+                        <span class="metric-label">Uptime</span>
+                        <span class="metric-value" id="system-uptime">-</span>
+                    </div>
+                    <div class="metric">
+                        <span class="metric-label">Redis</span>
+                        <span class="metric-value" id="redis-status">-</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Memory Usage Card -->
+            <div class="card">
+                <div class="card-title">
+                    <span class="card-icon">🧠</span>
+                    Memory Usage
+                </div>
+                <div id="memory-content">
+                    <div class="metric">
+                        <span class="metric-label">Heap Usage</span>
+                        <span class="metric-value large" id="heap-usage">-</span>
+                    </div>
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="heap-progress"></div>
+                    </div>
+                    <div class="metric">
+                        <span class="metric-label">RSS</span>
+                        <span class="metric-value" id="rss-usage">-</span>
+                    </div>
+                    <div class="metric">
+                        <span class="metric-label">External</span>
+                        <span class="metric-value" id="external-usage">-</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Documents Card -->
+            <div class="card">
+                <div class="card-title">
+                    <span class="card-icon">📄</span>
+                    Documents
+                </div>
+                <div id="documents-content">
+                    <div class="metric">
+                        <span class="metric-label">Total</span>
+                        <span class="metric-value large" id="total-documents">-</span>
+                    </div>
+                    <div class="metric">
+                        <span class="metric-label">Active</span>
+                        <span class="metric-value" id="active-documents">-</span>
+                    </div>
+                    <div class="metric">
+                        <span class="metric-label">Total Size</span>
+                        <span class="metric-value" id="total-size">-</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Connections Card -->
+            <div class="card">
+                <div class="card-title">
+                    <span class="card-icon">🔗</span>
+                    Connections
+                </div>
+                <div id="connections-content">
+                    <div class="metric">
+                        <span class="metric-label">Total</span>
+                        <span class="metric-value large" id="total-connections">-</span>
+                    </div>
+                    <div class="metric">
+                        <span class="metric-label">Average/Doc</span>
+                        <span class="metric-value" id="avg-connections">-</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Performance Metrics -->
+        <div class="card">
+            <div class="card-title">
+                <span class="card-icon">⚡</span>
+                Performance
+            </div>
+            <div id="performance-content">
+                <div class="metric">
+                    <span class="metric-label">Node.js Version</span>
+                    <span class="metric-value" id="node-version">-</span>
+                </div>
+                <div class="metric">
+                    <span class="metric-label">Platform</span>
+                    <span class="metric-value" id="platform">-</span>
+                </div>
+                <div class="metric">
+                    <span class="metric-label">Process ID</span>
+                    <span class="metric-value" id="process-id">-</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Document Details -->
+        <div class="card">
+            <div class="card-title">
+                <span class="card-icon">📋</span>
+                Document Details
+                <button class="refresh-btn" onclick="updateDocuments()" style="margin-left: auto; padding: 6px 12px; font-size: 0.875rem;">
+                    🔄 Refresh
+                </button>
+            </div>
+            <div class="document-list" id="document-list">
+                <div class="metric">
+                    <span class="metric-label">Loading documents...</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Quick Actions -->
+        <div class="card">
+            <div class="card-title">
+                <span class="card-icon">🛠️</span>
+                Quick Actions
+            </div>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px;">
+                <button class="refresh-btn" onclick="forceGarbageCollection()">
+                    🗑️ Force GC
+                </button>
+                <button class="refresh-btn" onclick="forceIdleCleanup()">
+                    💤 Force Idle Cleanup
+                </button>
+                <button class="refresh-btn" onclick="cleanupDocuments()">
+                    🧹 Cleanup Documents
+                </button>
+                <button class="refresh-btn" onclick="viewServerStats()">
+                    📊 Server Stats
+                </button>
+                <button class="refresh-btn" onclick="exportMetrics()">
+                    📥 Export Metrics
+                </button>
+            </div>
+            <div id="action-result" style="margin-top: 12px;"></div>
+        </div>
+    </div>
+
+    <script>
+        let autoRefreshInterval;
+        const API_BASE = window.location.origin + '/api';
+
+        async function fetchAPI(endpoint) {
+            try {
+                const response = await fetch(`${API_BASE}${endpoint}`);
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                return await response.json();
+            } catch (error) {
+                console.error(`API Error (${endpoint}):`, error);
+                throw error;
+            }
+        }
+
+        function showSuccess(message) {
+            const container = document.getElementById('error-container');
+            container.innerHTML = `<div style="background: #c6f6d5; color: #22543d; padding: 12px; border-radius: 8px; margin: 16px 0;">✅ ${message}</div>`;
+            setTimeout(() => container.innerHTML = '', 3000);
+        }
+
+        function showError(message) {
+            const container = document.getElementById('error-container');
+            container.innerHTML = `<div class="error">⚠️ ${message}</div>`;
+            setTimeout(() => container.innerHTML = '', 5000);
+        }
+
+        function formatUptime(seconds) {
+            const hours = Math.floor(seconds / 3600);
+            const minutes = Math.floor((seconds % 3600) / 60);
+            const secs = seconds % 60;
+            return `${hours}h ${minutes}m ${secs}s`;
+        }
+
+        function formatBytes(bytes) {
+            if (bytes === 0) return '0 B';
+            const k = 1024;
+            const sizes = ['B', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+        }
+
+        function getStatusIndicator(status) {
+            const statusClass = status === 'healthy' ? 'status-healthy' : 
+                              status === 'warning' ? 'status-warning' : 'status-critical';
+            return `<span class="status-indicator ${statusClass}"></span>${status.toUpperCase()}`;
+        }
+
+        async function updateHealth() {
+            try {
+                const health = await fetchAPI('/dashboard/health');
+                document.getElementById('system-status').innerHTML = getStatusIndicator(health.status);
+                document.getElementById('system-uptime').textContent = formatUptime(health.checks.server.uptime);
+                document.getElementById('redis-status').innerHTML = getStatusIndicator(health.checks.redis.status);
+            } catch (error) {
+                showError('Failed to load health data');
+            }
+        }
+
+        async function updateMetrics() {
+            try {
+                const metrics = await fetchAPI('/dashboard/metrics');
+                
+                // Memory metrics
+                document.getElementById('heap-usage').textContent = `${metrics.memory.heapUsagePercent}%`;
+                document.getElementById('rss-usage').textContent = `${metrics.memory.rss}MB`;
+                document.getElementById('external-usage').textContent = `${metrics.memory.external}MB`;
+                
+                // Progress bar
+                const heapProgress = document.getElementById('heap-progress');
+                heapProgress.style.width = `${metrics.memory.heapUsagePercent}%`;
+                heapProgress.className = 'progress-fill';
+                if (metrics.memory.heapUsagePercent > 90) heapProgress.classList.add('critical');
+                else if (metrics.memory.heapUsagePercent > 75) heapProgress.classList.add('warning');
+                
+                // Document metrics
+                document.getElementById('total-documents').textContent = metrics.documents.total;
+                document.getElementById('active-documents').textContent = metrics.documents.active;
+                document.getElementById('total-size').textContent = formatBytes(metrics.documents.totalSize * 1024);
+                
+                // Connection metrics
+                document.getElementById('total-connections').textContent = metrics.connections.total;
+                document.getElementById('avg-connections').textContent = metrics.connections.averagePerDocument.toFixed(1);
+
+                // Server info
+                if (metrics.server) {
+                    document.getElementById('node-version').textContent = metrics.server.nodeVersion || '-';
+                    document.getElementById('platform').textContent = metrics.server.platform || '-';
+                    document.getElementById('process-id').textContent = metrics.server.pid || '-';
+                }
+
+            } catch (error) {
+                showError('Failed to load metrics');
+            }
+        }
+
+        async function updateDocuments() {
+            try {
+                const data = await fetchAPI('/dashboard/documents');
+                const container = document.getElementById('document-list');
+                
+                if (data.documents.length === 0) {
+                    container.innerHTML = '<div class="metric"><span class="metric-label">No documents found</span></div>';
+                    return;
+                }
+                
+                container.innerHTML = data.documents.map(doc => `
+                    <div class="document-item ${doc.isActive ? 'active' : ''}">
+                        <div class="document-info">
+                            <div class="document-name">${doc.id}</div>
+                            <div class="document-meta">
+                                Size: ${formatBytes(doc.size * 1024)} • 
+                                Last activity: ${new Date(doc.lastActivity).toLocaleTimeString()}
+                            </div>
+                        </div>
+                        <div class="document-stats">
+                            <div class="connection-count">${doc.connectionCount} connections</div>
+                        </div>
+                    </div>
+                `).join('');
+                
+            } catch (error) {
+                showError('Failed to load documents');
+            }
+        }
+
+        async function refreshDashboard() {
+            const dashboard = document.querySelector('.dashboard');
+            dashboard.classList.add('loading');
+            
+            try {
+                await Promise.all([
+                    updateHealth(),
+                    updateMetrics(),
+                    updateDocuments()
+                ]);
+            } catch (error) {
+                console.error('Dashboard refresh failed:', error);
+            } finally {
+                dashboard.classList.remove('loading');
+            }
+        }
+
+        function setupAutoRefresh() {
+            const checkbox = document.getElementById('autoRefresh');
+            
+            function toggleAutoRefresh() {
+                if (checkbox.checked) {
+                    autoRefreshInterval = setInterval(refreshDashboard, 5000);
+                } else {
+                    clearInterval(autoRefreshInterval);
+                }
+            }
+            
+            checkbox.addEventListener('change', toggleAutoRefresh);
+            toggleAutoRefresh(); // Start if checked
+        }
+
+        // Quick Actions
+        async function forceGarbageCollection() {
+            const resultDiv = document.getElementById('action-result');
+            resultDiv.innerHTML = '<div style="color: #667eea;">🗑️ Running garbage collection...</div>';
+
+            try {
+                const response = await fetch(`${API_BASE}/gc`, { method: 'POST' });
+                const result = await response.json();
+
+                if (response.ok && result.success) {
+                    const improvement = result.improvement;
+                    resultDiv.innerHTML = `
+                        <div style="color: #48bb78;">
+                            ✅ GC completed! Freed ${improvement.heapFreed}MB heap memory
+                            <br><small>Before: ${improvement.heapUsedBefore}MB → After: ${improvement.heapUsedAfter}MB</small>
+                        </div>
+                    `;
+                    setTimeout(() => refreshDashboard(), 1000);
+                } else {
+                    resultDiv.innerHTML = `<div style="color: #f56565;">❌ ${result.error || 'GC failed'}</div>`;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `<div style="color: #f56565;">❌ Failed to trigger garbage collection</div>`;
+            }
+
+            setTimeout(() => resultDiv.innerHTML = '', 8000);
+        }
+
+        async function forceIdleCleanup() {
+            const resultDiv = document.getElementById('action-result');
+            resultDiv.innerHTML = '<div style="color: #667eea;">💤 Force cleaning idle documents...</div>';
+
+            try {
+                const response = await fetch(`${API_BASE}/cleanup/idle`, { method: 'POST' });
+                const result = await response.json();
+
+                if (response.ok && result.success) {
+                    resultDiv.innerHTML = `
+                        <div style="color: #48bb78;">
+                            ✅ ${result.message}
+                            <br><small>Cleaned: ${result.cleanedDocuments.join(', ') || 'None'}</small>
+                        </div>
+                    `;
+                    setTimeout(() => refreshDashboard(), 1000);
+                } else {
+                    resultDiv.innerHTML = `<div style="color: #f56565;">❌ ${result.error || 'Idle cleanup failed'}</div>`;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `<div style="color: #f56565;">❌ Failed to force idle cleanup</div>`;
+            }
+
+            setTimeout(() => resultDiv.innerHTML = '', 8000);
+        }
+
+        async function cleanupDocuments() {
+            const resultDiv = document.getElementById('action-result');
+            resultDiv.innerHTML = '<div style="color: #667eea;">🔄 Cleaning up documents...</div>';
+
+            try {
+                const response = await fetch(`${API_BASE}/cleanup/documents`, { method: 'POST' });
+                const result = await response.json();
+
+                if (response.ok) {
+                    resultDiv.innerHTML = `<div style="color: #48bb78;">✅ Cleaned ${result.cleaned?.length || 0} documents</div>`;
+                    setTimeout(() => refreshDashboard(), 1000);
+                } else {
+                    resultDiv.innerHTML = `<div style="color: #f56565;">❌ ${result.error}</div>`;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `<div style="color: #f56565;">❌ Failed to cleanup documents</div>`;
+            }
+
+            setTimeout(() => resultDiv.innerHTML = '', 5000);
+        }
+
+        async function viewServerStats() {
+            try {
+                const stats = await fetchAPI('/stats');
+                const modal = document.createElement('div');
+                modal.style.cssText = `
+                    position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+                    background: rgba(0,0,0,0.8); display: flex; align-items: center;
+                    justify-content: center; z-index: 1000;
+                `;
+                modal.innerHTML = `
+                    <div style="background: white; padding: 24px; border-radius: 16px; max-width: 600px; max-height: 80vh; overflow-y: auto;">
+                        <h3 style="margin-bottom: 16px;">📊 Server Statistics</h3>
+                        <pre style="background: #f7fafc; padding: 16px; border-radius: 8px; overflow-x: auto;">${JSON.stringify(stats, null, 2)}</pre>
+                        <button onclick="this.parentElement.parentElement.remove()" style="margin-top: 16px; padding: 8px 16px; background: #667eea; color: white; border: none; border-radius: 8px; cursor: pointer;">Close</button>
+                    </div>
+                `;
+                document.body.appendChild(modal);
+                modal.onclick = (e) => e.target === modal && modal.remove();
+            } catch (error) {
+                showError('Failed to load server stats');
+            }
+        }
+
+        async function exportMetrics() {
+            try {
+                const [metrics, health, performance] = await Promise.all([
+                    fetchAPI('/dashboard/metrics'),
+                    fetchAPI('/dashboard/health'),
+                    fetchAPI('/dashboard/performance')
+                ]);
+
+                const exportData = {
+                    timestamp: new Date().toISOString(),
+                    metrics,
+                    health,
+                    performance
+                };
+
+                const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `yjs-server-metrics-${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.json`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+
+                const resultDiv = document.getElementById('action-result');
+                resultDiv.innerHTML = '<div style="color: #48bb78;">✅ Metrics exported successfully</div>';
+                setTimeout(() => resultDiv.innerHTML = '', 3000);
+            } catch (error) {
+                showError('Failed to export metrics');
+            }
+        }
+
+        // Initialize dashboard
+        document.addEventListener('DOMContentLoaded', () => {
+            refreshDashboard();
+            setupAutoRefresh();
+        });
+    </script>
+</body>
+</html>

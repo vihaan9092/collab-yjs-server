@@ -1,7 +1,4 @@
-/**
- * Connection Pool Manager for Large Document Optimization
- * Handles connection pooling, load balancing, and resource allocation
- */
+
 
 const EventEmitter = require('events');
 
@@ -19,10 +16,10 @@ class ConnectionPool extends EventEmitter {
       ...config
     };
 
-    this.connections = new Map(); // connectionId -> connection data
-    this.documentConnections = new Map(); // documentId -> Set of connectionIds
-    this.userConnections = new Map(); // userId -> Set of connectionIds
-    this.connectionQueues = new Map(); // priority -> queue of pending connections
+    this.connections = new Map();
+    this.documentConnections = new Map();
+    this.userConnections = new Map();
+    this.connectionQueues = new Map();
     
     this.stats = {
       totalConnections: 0,
@@ -35,24 +32,32 @@ class ConnectionPool extends EventEmitter {
     this.startConnectionMonitoring();
   }
 
-  /**
-   * Start connection monitoring and cleanup
-   */
   startConnectionMonitoring() {
-    // Heartbeat monitoring
-    setInterval(() => {
-      this.performHeartbeatCheck();
+    this.heartbeatInterval = setInterval(() => {
+      try {
+        this.performHeartbeatCheck();
+      } catch (error) {
+        this.logger.error('Heartbeat check failed', error);
+      }
     }, this.config.heartbeatInterval);
 
     // Connection cleanup
-    setInterval(() => {
-      this.cleanupStaleConnections();
+    this.cleanupInterval = setInterval(() => {
+      try {
+        this.cleanupStaleConnections();
+      } catch (error) {
+        this.logger.error('Connection cleanup failed', error);
+      }
     }, 60000); // Every minute
 
     // Load balancing
     if (this.config.loadBalancingEnabled) {
-      setInterval(() => {
-        this.balanceConnections();
+      this.balancingInterval = setInterval(() => {
+        try {
+          this.balanceConnections();
+        } catch (error) {
+          this.logger.error('Connection balancing failed', error);
+        }
       }, 10000); // Every 10 seconds
     }
   }
@@ -463,6 +468,20 @@ class ConnectionPool extends EventEmitter {
    * Destroy the connection pool
    */
   destroy() {
+    // Clear all intervals
+    if (this.heartbeatInterval) {
+      clearInterval(this.heartbeatInterval);
+      this.heartbeatInterval = null;
+    }
+    if (this.cleanupInterval) {
+      clearInterval(this.cleanupInterval);
+      this.cleanupInterval = null;
+    }
+    if (this.balancingInterval) {
+      clearInterval(this.balancingInterval);
+      this.balancingInterval = null;
+    }
+
     this.connections.clear();
     this.documentConnections.clear();
     this.userConnections.clear();

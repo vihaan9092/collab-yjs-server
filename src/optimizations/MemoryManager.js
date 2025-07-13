@@ -1,7 +1,4 @@
-/**
- * Memory Management Service for Large Document Optimization
- * Handles memory optimization, garbage collection, and resource management
- */
+
 
 const EventEmitter = require('events');
 
@@ -10,9 +7,9 @@ class MemoryManager extends EventEmitter {
     super();
     this.logger = logger;
     this.config = {
-      maxMemoryUsage: config.maxMemoryUsage || 512 * 1024 * 1024, // 512MB
-      gcThreshold: config.gcThreshold || 0.8, // 80% memory usage
-      gcInterval: config.gcInterval || 30000, // 30 seconds
+      maxMemoryUsage: config.maxMemoryUsage || 512 * 1024 * 1024,
+      gcThreshold: config.gcThreshold || 0.8,
+      gcInterval: config.gcInterval || 30000,
       documentCacheSize: config.documentCacheSize || 100,
       historyLimit: config.historyLimit || 50,
       ...config
@@ -29,33 +26,61 @@ class MemoryManager extends EventEmitter {
     this.startMemoryMonitoring();
   }
 
-  /**
-   * Start memory monitoring and automatic garbage collection
-   */
   startMemoryMonitoring() {
-    setInterval(() => {
-      this.checkMemoryUsage();
-    }, this.config.gcInterval);
+    this.startIdleMonitoring();
 
-    // Monitor Node.js garbage collection
     if (global.gc) {
       this.logger.info('Manual garbage collection available');
     }
   }
 
-  /**
-   * Check current memory usage and trigger cleanup if needed
-   */
+  startIdleMonitoring() {
+    this.monitoringInterval = setInterval(() => {
+      try {
+        this.checkMemoryUsage();
+      } catch (error) {
+        this.logger.error('Memory monitoring check failed', error);
+      }
+    }, this.config.gcInterval * 3);
+  }
+
+  startActiveMonitoring() {
+    if (this.monitoringInterval) {
+      clearInterval(this.monitoringInterval);
+    }
+
+    this.monitoringInterval = setInterval(() => {
+      try {
+        this.checkMemoryUsage();
+      } catch (error) {
+        this.logger.error('Memory monitoring check failed', error);
+      }
+    }, this.config.gcInterval);
+  }
+
+  switchToIdleMode() {
+    if (this.monitoringInterval) {
+      clearInterval(this.monitoringInterval);
+    }
+    this.startIdleMonitoring();
+    this.logger.debug('Switched to idle memory monitoring');
+  }
+
+  switchToActiveMode() {
+    if (this.monitoringInterval) {
+      clearInterval(this.monitoringInterval);
+    }
+    this.startActiveMonitoring();
+    this.logger.debug('Switched to active memory monitoring');
+  }
+
   checkMemoryUsage() {
     const memUsage = process.memoryUsage();
     const usedMB = memUsage.heapUsed / 1024 / 1024;
     const totalMB = memUsage.heapTotal / 1024 / 1024;
 
-    // Fix: Use heapTotal instead of arbitrary maxMemoryUsage for percentage calculation
     const usagePercent = memUsage.heapUsed / memUsage.heapTotal;
     const configUsagePercent = memUsage.heapUsed / this.config.maxMemoryUsage;
-
-    // Update peak usage
     if (memUsage.heapUsed > this.memoryStats.peakUsage) {
       this.memoryStats.peakUsage = memUsage.heapUsed;
     }
@@ -69,42 +94,34 @@ class MemoryManager extends EventEmitter {
       maxMemoryLimit: `${(this.config.maxMemoryUsage / 1024 / 1024).toFixed(2)}MB`
     });
 
-    // Trigger cleanup if memory usage is high (use the more conservative threshold)
     const shouldCleanup = usagePercent > this.config.gcThreshold || configUsagePercent > this.config.gcThreshold;
 
     if (shouldCleanup) {
       this.performMemoryCleanup();
     }
 
-    // Emit memory stats for monitoring (use heap-based percentage for alerts)
     this.emit('memoryStats', {
       heapUsed: memUsage.heapUsed,
       heapTotal: memUsage.heapTotal,
-      usagePercent: usagePercent, // Use heap-based percentage
+      usagePercent: usagePercent,
       configUsagePercent: configUsagePercent,
       documentsCached: this.documentCache.size
     });
   }
 
-  /**
-   * Perform memory cleanup operations
-   */
   async performMemoryCleanup() {
     this.logger.info('Starting memory cleanup');
     const startTime = Date.now();
 
     try {
-      // 1. Clean document cache
       const evictedDocs = this.evictOldDocuments();
-      
-      // 2. Trigger garbage collection if available
+
       if (global.gc) {
         global.gc();
         this.memoryStats.gcCount++;
         this.memoryStats.lastGC = new Date();
       }
 
-      // 3. Clean up event listeners
       this.cleanupEventListeners();
 
       const duration = Date.now() - startTime;
@@ -119,10 +136,6 @@ class MemoryManager extends EventEmitter {
     }
   }
 
-  /**
-   * Evict old documents from cache
-   * @returns {number} Number of documents evicted
-   */
   evictOldDocuments() {
     if (this.documentCache.size <= this.config.documentCacheSize) {
       return 0;
@@ -270,12 +283,12 @@ class MemoryManager extends EventEmitter {
    */
   getMemoryStats() {
     const memUsage = process.memoryUsage();
-    
+
     return {
       heap: {
         used: memUsage.heapUsed,
         total: memUsage.heapTotal,
-        usagePercent: (memUsage.heapUsed / this.config.maxMemoryUsage * 100).toFixed(2)
+        usagePercent: (memUsage.heapUsed / memUsage.heapTotal * 100).toFixed(2)
       },
       cache: {
         documentCount: this.documentCache.size,
@@ -311,6 +324,10 @@ class MemoryManager extends EventEmitter {
    * Cleanup and destroy the memory manager
    */
   destroy() {
+    if (this.monitoringInterval) {
+      clearInterval(this.monitoringInterval);
+      this.monitoringInterval = null;
+    }
     this.documentCache.clear();
     this.removeAllListeners();
     this.logger.info('MemoryManager destroyed');

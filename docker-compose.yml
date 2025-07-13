@@ -23,14 +23,11 @@ services:
     container_name: realtime-yjs-server
     ports:
       - "3000:3000"
+    env_file:
+      - .env
     environment:
       - NODE_ENV=production
       - REDIS_URL=redis://redis:6379
-      - JWT_SECRET=${JWT_SECRET:-your-super-secret-jwt-key-change-in-production}
-      - AUTH_TEST_MODE=${AUTH_TEST_MODE:-false}
-      - DEBOUNCE_ENABLED=${DEBOUNCE_ENABLED:-true}
-      - DEBOUNCE_DELAY=${DEBOUNCE_DELAY:-300}
-      - DEBOUNCE_MAX_DELAY=${DEBOUNCE_MAX_DELAY:-1000}
     depends_on:
       redis:
         condition: service_healthy

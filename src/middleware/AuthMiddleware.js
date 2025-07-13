@@ -1,7 +1,4 @@
-/**
- * Authentication Middleware for WebSocket Server
- * Handles JWT token validation and user authentication from Django
- */
+
 
 const jwt = require('jsonwebtoken');
 const Redis = require('ioredis');
@@ -13,14 +10,12 @@ class AuthMiddleware {
         this.redisUrl = config.redisUrl || process.env.REDIS_URL || 'redis://localhost:6379';
         this.testMode = config.testMode || process.env.AUTH_TEST_MODE === 'true';
         
-        // Initialize Redis client for caching user sessions
         this.redis = new Redis(this.redisUrl, {
             retryDelayOnFailover: 100,
             maxRetriesPerRequest: 3,
             lazyConnect: true
         });
-        
-        // Initialize logger instance
+
         this.logger = new Logger();
 
         this.redis.on('connect', () => {
@@ -32,22 +27,13 @@ class AuthMiddleware {
         });
     }
 
-    /**
-     * Validate JWT syntax and structure
-     * @param {string} token - JWT token to validate
-     * @returns {Object} - Validation result with isValid and error
-     */
     validateJWTSyntax(token) {
         try {
-            // Remove Bearer prefix if present
             const cleanToken = token.replace(/^Bearer\s+/, '');
 
-            // Basic length check
             if (cleanToken.length < 10) {
                 return { isValid: false, error: 'Token too short' };
             }
-
-            // JWT must have exactly 3 parts separated by dots
             const parts = cleanToken.split('.');
             if (parts.length !== 3) {
                 return { isValid: false, error: 'JWT must have exactly 3 parts (header.payload.signature)' };

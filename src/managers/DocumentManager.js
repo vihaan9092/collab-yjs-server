@@ -5,7 +5,7 @@ const DocumentChunker = require('../optimizations/DocumentChunker');
 const MemoryManager = require('../optimizations/MemoryManager');
 const ConnectionPool = require('../optimizations/ConnectionPool');
 const PerformanceMonitor = require('../optimizations/PerformanceMonitor');
-const { getOptimizedDebounceConfig } = require('../config/debounceConfig');
+const { getDebounceConfig } = require('../config/debounceConfig');
 
 class DocumentManager extends IDocumentManager {
   constructor(logger, config = {}) {
@@ -22,7 +22,6 @@ class DocumentManager extends IDocumentManager {
 
     this.syncedDocuments = new Set();
 
-    // Initialize optimization components (with feature flags)
     const optimizationsEnabled = process.env.ENABLE_OPTIMIZATIONS !== 'false';
 
     this.documentChunker = new DocumentChunker(logger, {
@@ -30,13 +29,13 @@ class DocumentManager extends IDocumentManager {
       compressionEnabled: config.compressionEnabled !== false
     });
 
-    // Only enable memory-intensive components if explicitly enabled
     if (optimizationsEnabled) {
       this.memoryManager = new MemoryManager(logger, {
-        maxMemoryUsage: config.maxMemoryUsage || 1024 * 1024 * 1024, // Increase to 1GB
-        documentCacheSize: config.documentCacheSize || 50, // Reduce cache size
-        gcInterval: config.gcInterval || 60000, // Increase interval to 1 minute
-        gcThreshold: 0.95 // Only cleanup at 95% usage
+        maxMemoryUsage: parseInt(process.env.MAX_MEMORY_USAGE) || config.maxMemoryUsage || 1024 * 1024 * 1024,
+        documentCacheSize: parseInt(process.env.DOCUMENT_CACHE_SIZE) || config.documentCacheSize || 25,
+        gcInterval: parseInt(process.env.MEMORY_GC_INTERVAL) || config.gcInterval || 30000,
+        gcThreshold: parseFloat(process.env.MEMORY_GC_THRESHOLD) || 0.85,
+        historyLimit: parseInt(process.env.DOCUMENT_HISTORY_LIMIT) || 25
       });
 
       this.connectionPool = new ConnectionPool(logger, {
@@ -73,9 +72,14 @@ class DocumentManager extends IDocumentManager {
           await this.cleanup();
         } catch (error) {
           this.logger.error('Scheduled cleanup failed, continuing operation', error);
-          // Don't throw - just log and continue
         }
-      }, config.cleanupInterval);
+      }, config.cleanupInterval * 2);
+      this.lastActivity = Date.now();
+      this.isIdle = true;
+
+      this.idleCheckInterval = setInterval(() => {
+        this.checkIdleState();
+      }, 2 * 60 * 1000);
     } else {
       this.logger.warn('Document cleanup not scheduled - cleanupInterval not configured');
     }
@@ -85,10 +89,9 @@ class DocumentManager extends IDocumentManager {
    * Setup optimization event listeners
    */
   setupOptimizationListeners() {
-    // Memory management alerts (only if enabled)
     if (this.memoryManager) {
       this.memoryManager.on('memoryStats', (stats) => {
-        if (stats.usagePercent > 0.9) { // Only warn at 90%+
+        if (stats.usagePercent > 0.9) {
           this.logger.warn('High memory usage detected', {
             usagePercent: `${(stats.usagePercent * 100).toFixed(2)}%`,
             heapUsed: `${(stats.heapUsed / 1024 / 1024).toFixed(2)}MB`
@@ -97,14 +100,12 @@ class DocumentManager extends IDocumentManager {
       });
     }
 
-    // Performance monitoring alerts (only if enabled)
     if (this.performanceMonitor) {
       this.performanceMonitor.on('alert', (alert) => {
         this.logger.warn('Performance alert', alert);
       });
     }
 
-    // Connection pool events (only if enabled)
     if (this.connectionPool && this.performanceMonitor) {
       this.connectionPool.on('connectionAdded', (connection) => {
         this.performanceMonitor.trackConnectionPerformance(connection.id, {
@@ -124,6 +125,8 @@ class DocumentManager extends IDocumentManager {
 
   async getDocument(documentId) {
     try {
+      this.markActivity();
+
       const doc = await getYDoc(documentId, this.gcEnabled);
 
       if (!this.documentStats.has(documentId)) {
@@ -201,7 +204,7 @@ class DocumentManager extends IDocumentManager {
    * @param {Object} metadata - Update metadata
    * @param {Object} syncInfo - Sync information
    */
-  handleRemoteUpdate(documentId, doc, update, origin, metadata, syncInfo) {
+  handleRemoteUpdate(documentId, doc, update, _origin, _metadata, syncInfo) {
     try {
       // Apply the update with special origin to prevent re-broadcasting
       applyUpdateToDoc(doc, update, 'redis-sync');
@@ -243,6 +246,20 @@ class DocumentManager extends IDocumentManager {
       const connectionCount = this.connectionPool ?
         this.connectionPool.getDocumentConnections(documentId).length : 0;
 
+      // Get debounce configuration optimized for document size and connection count
+      const documentSize = update.length;
+      const debounceConfig = getDebounceConfig(documentSize, connectionCount);
+
+      if (documentSize > debounceConfig.largeDocumentThreshold || connectionCount > debounceConfig.baseConnectionCount) {
+        this.logger.debug('Using optimized debounce settings', {
+          documentId,
+          documentSize,
+          connectionCount,
+          debounceDelay: debounceConfig.delay,
+          debounceMaxDelay: debounceConfig.maxDelay
+        });
+      }
+
       // Optimize update for large documents (only if chunker is available)
       let optimizedUpdate = update;
       if (this.documentChunker && update.length > 64 * 1024) { // 64KB threshold
@@ -257,7 +274,12 @@ class DocumentManager extends IDocumentManager {
               size: chunks[i].length,
               chunkIndex: i,
               totalChunks: chunks.length,
-              isChunked: true
+              isChunked: true,
+              debounceConfig: {
+                delay: debounceConfig.delay,
+                maxDelay: debounceConfig.maxDelay,
+                enabled: debounceConfig.enabled
+              }
             });
           }
 
@@ -286,7 +308,12 @@ class DocumentManager extends IDocumentManager {
       await this.redisSync.broadcastUpdate(documentId, optimizedUpdate, origin, {
         timestamp: Date.now(),
         size: optimizedUpdate.length,
-        connectionCount
+        connectionCount,
+        debounceConfig: {
+          delay: debounceConfig.delay,
+          maxDelay: debounceConfig.maxDelay,
+          enabled: debounceConfig.enabled
+        }
       });
 
       const latency = Date.now() - startTime;
@@ -459,39 +486,6 @@ class DocumentManager extends IDocumentManager {
     }
   }
 
-
-
-  setupDocumentListeners(doc, documentId) {
-    // y-websocket handles document listeners internally
-    // We can add custom listeners here if needed
-    doc.on('update', (update, origin) => {
-      // Update statistics
-      const stats = this.documentStats.get(documentId);
-      if (stats) {
-        stats.updateCount++;
-        stats.lastAccessed = new Date();
-      }
-
-      this.logger.debug('Document updated', {
-        documentId,
-        updateSize: update.length,
-        origin
-      });
-    });
-
-    // Listen for document destruction
-    doc.on('destroy', () => {
-      this.logger.debug('Document destroyed', { documentId });
-    });
-  }
-
-  updateConnectionCount(documentId, count) {
-    const stats = this.documentStats.get(documentId);
-    if (stats) {
-      stats.connectionCount = count;
-    }
-  }
-
   getOverallStats() {
     try {
       const totalConnections = Array.from(docs.values())
@@ -511,10 +505,103 @@ class DocumentManager extends IDocumentManager {
     }
   }
 
+  /**
+   * Mark activity detected - switch to active monitoring
+   */
+  markActivity() {
+    this.lastActivity = Date.now();
+
+    if (this.isIdle) {
+      this.isIdle = false;
+      this.switchToActiveMode();
+    }
+  }
+
+  /**
+   * Check if system should be in idle mode
+   */
+  checkIdleState() {
+    const idleThreshold = 2 * 60 * 1000; // 2 minutes (more aggressive)
+    const timeSinceActivity = Date.now() - this.lastActivity;
+
+    // More aggressive idle detection - switch to idle if no documents OR no connections
+    const hasActiveConnections = Array.from(this.documentStats.values()).some(stats => stats.connectionCount > 0);
+
+    if (!this.isIdle && timeSinceActivity > idleThreshold && !hasActiveConnections) {
+      this.isIdle = true;
+      this.switchToIdleMode();
+
+      // Force cleanup when going idle
+      this.performAggressiveCleanup();
+    }
+  }
+
+  /**
+   * Switch to active monitoring mode
+   */
+  switchToActiveMode() {
+    // Switch memory manager to active mode
+    if (this.memoryManager && this.memoryManager.switchToActiveMode) {
+      this.memoryManager.switchToActiveMode();
+    }
+
+    // Switch performance monitor to active mode
+    if (this.performanceMonitor && this.performanceMonitor.switchToActiveMode) {
+      this.performanceMonitor.switchToActiveMode();
+    }
+
+    this.logger.info('Switched to active monitoring mode');
+  }
+
+  /**
+   * Switch to idle monitoring mode
+   */
+  switchToIdleMode() {
+    // Switch memory manager to idle mode
+    if (this.memoryManager && this.memoryManager.switchToIdleMode) {
+      this.memoryManager.switchToIdleMode();
+    }
+
+    // Switch performance monitor to idle mode
+    if (this.performanceMonitor && this.performanceMonitor.switchToIdleMode) {
+      this.performanceMonitor.switchToIdleMode();
+    }
+
+    this.logger.info('Switched to idle monitoring mode');
+  }
+
+  /**
+   * Perform aggressive cleanup when going idle
+   */
+  async performAggressiveCleanup() {
+    try {
+      this.logger.info('Performing aggressive idle cleanup');
+
+      // Force garbage collection
+      if (global.gc) {
+        global.gc();
+      }
+
+      // Clear any cached data
+      if (this.memoryManager && this.memoryManager.documentCache) {
+        this.memoryManager.documentCache.clear();
+      }
+
+      this.logger.info('Aggressive idle cleanup completed');
+    } catch (error) {
+      this.logger.error('Aggressive cleanup failed', error);
+    }
+  }
+
   async destroy() {
     // Clear cleanup interval
     if (this.cleanupInterval) {
       clearInterval(this.cleanupInterval);
+    }
+
+    // Clear idle check interval
+    if (this.idleCheckInterval) {
+      clearInterval(this.idleCheckInterval);
     }
 
     // Cleanup Redis sync service
@@ -536,6 +623,17 @@ class DocumentManager extends IDocumentManager {
 
       // Clear the global docs map
       docs.clear();
+    }
+
+    // Cleanup optimization components
+    if (this.memoryManager) {
+      this.memoryManager.destroy();
+    }
+    if (this.connectionPool) {
+      this.connectionPool.destroy();
+    }
+    if (this.performanceMonitor) {
+      this.performanceMonitor.destroy();
     }
 
     // Clear local stats and sync tracking

@@ -1,4 +1,5 @@
 const express = require('express');
+const path = require('path');
 const cors = require('cors');
 const helmet = require('helmet');
 
@@ -53,6 +54,12 @@ class HttpServerHandler {
   }
 
   setupRoutes(wss) {
+    this.app.use(express.static('public'));
+
+    this.app.get('/dashboard', (req, res) => {
+      res.sendFile(path.join(process.cwd(), 'public', 'dashboard.html'));
+    });
+
     this.app.get('/health', this.routeHandler.createHealthRoute(wss));
     this.app.get('/examples/*', this.routeHandler.createDeprecatedRoutesHandler());
 
@@ -70,11 +77,19 @@ class HttpServerHandler {
         error: 'Not Found',
         message: `Route ${req.method} ${req.url} not found`,
         availableRoutes: [
+          'GET /dashboard - Interactive monitoring dashboard',
           'GET /health - Server health check',
           'GET /api/auth/status - Authentication status',
           'GET /api/stats - Server statistics',
+          'GET /api/dashboard/metrics - Real-time dashboard metrics',
+          'GET /api/dashboard/documents - Document details for dashboard',
+          'GET /api/dashboard/health - System health status',
+          'GET /api/dashboard/performance - Performance metrics',
+          'POST /api/gc - Force garbage collection',
+          'POST /api/cleanup/idle - Force cleanup idle documents',
           'GET /api/documents/:documentId - Document information',
           'DELETE /api/documents/:documentId - Force document cleanup',
+          'POST /api/cleanup/documents - Cleanup stale documents',
           'GET /api/debug/documents - Debug document list'
         ]
       });
