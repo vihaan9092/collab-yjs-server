@@ -1,42 +1,29 @@
 const Redis = require('ioredis');
 const { v4: uuidv4 } = require('uuid');
 
-/**
- * Redis Document Synchronization Service
- * Handles cross-instance document updates via Redis Pub/Sub
- * Phase 1 of scaling implementation
- */
+
 class RedisDocumentSync {
   constructor(logger, config = {}) {
     this.logger = logger;
     this.config = config;
     this.instanceId = process.env.INSTANCE_ID || uuidv4();
     
-    // Redis configuration
     this.redisUrl = config.redisUrl || process.env.REDIS_URL || 'redis://localhost:6379';
     this.keyPrefix = config.keyPrefix || 'collab:';
-    
-    // Initialize Redis clients
-    // Note: keyPrefix should NOT be used for pub/sub operations
     this.publisher = new Redis(this.redisUrl, {
       retryDelayOnFailover: 100,
       maxRetriesPerRequest: 3,
       lazyConnect: true
-      // No keyPrefix for pub/sub operations
     });
 
     this.subscriber = new Redis(this.redisUrl, {
       retryDelayOnFailover: 100,
       maxRetriesPerRequest: 3,
       lazyConnect: true
-      // No keyPrefix for pub/sub operations
     });
-    
-    // Track subscriptions and handlers
-    this.subscriptions = new Map(); // documentId -> Set of handlers
-    this.documentChannels = new Map(); // documentId -> channel name
-    
-    // Performance metrics
+
+    this.subscriptions = new Map();
+    this.documentChannels = new Map();
     this.metrics = {
       messagesSent: 0,
       messagesReceived: 0,
@@ -108,14 +95,14 @@ class RedisDocumentSync {
       this.metrics.messagesSent++;
       this.metrics.lastActivity = new Date();
 
-      this.logger.info('Redis pub/sub message sent', {
-        documentId,
-        updateSize: update.length,
-        channel,
-        totalMessagesSent: this.metrics.messagesSent,
-        instanceId: this.instanceId,
-        messageId: message.messageId
-      });
+      // this.logger.info('Redis pub/sub message sent', {
+      //   documentId,
+      //   updateSize: update.length,
+      //   channel,
+      //   totalMessagesSent: this.metrics.messagesSent,
+      //   instanceId: this.instanceId,
+      //   messageId: message.messageId
+      // });
       
     } catch (error) {
       this.logger.error('Failed to broadcast document update', error, {

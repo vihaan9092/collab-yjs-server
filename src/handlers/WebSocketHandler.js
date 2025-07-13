@@ -14,7 +14,17 @@ class WebSocketHandler {
       this.wss = new WebSocket.Server({ noServer: true });
 
       this.wss.on('connection', async (ws, req) => {
-        await this.handleConnection(ws, req);
+        try {
+          await this.handleConnection(ws, req);
+        } catch (error) {
+          this.logger.error('Error in WebSocket connection handler', error, {
+            url: req.url,
+            service: 'websocket-handler'
+          });
+          if (ws.readyState === WebSocket.OPEN) {
+            ws.close(1011, 'Server error during connection setup');
+          }
+        }
       });
 
       httpServer.on('upgrade', async (request, socket, head) => {
@@ -187,8 +197,14 @@ class WebSocketHandler {
 
   close() {
     if (this.wss) {
+      this.wss.clients.forEach((ws) => {
+        if (ws.readyState === WebSocket.OPEN) {
+          ws.close(1001, 'Server shutting down');
+        }
+      });
+
       this.wss.close();
-      this.logger.info('WebSocket server closed', {
+      this.logger.info('WebSocket server closed and all connections terminated', {
         service: 'websocket-handler'
       });
     }

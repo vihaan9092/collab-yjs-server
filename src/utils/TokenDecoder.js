@@ -8,22 +8,14 @@ class TokenDecoder {
     });
   }
 
-  /**
-   * Modern token decoding using built-in Node.js functions
-   * @param {string} encodedToken - URL-safe base64 encoded token
-   * @returns {string} - Decoded JWT token
-   * @throws {Error} - If decoding fails
-   */
   decodeTokenFromWebSocket(encodedToken) {
     try {
       if (typeof encodedToken !== 'string' || encodedToken.length < 10) {
         throw new Error('Missing or short token');
       }
 
-      // Attempt to decode directly
       const decoded = Base64.decode(encodedToken, true);
 
-      // Fast structural check without regex
       const parts = decoded.split('.');
       if (parts.length !== 3) {
         throw new Error('Invalid JWT structure');
@@ -39,12 +31,6 @@ class TokenDecoder {
     }
   }
 
-  /**
-   * Modern token encoding using built-in Node.js functions
-   * Industry standard approach used by Google, AWS, Microsoft
-   * @param {string} token - JWT token to encode
-   * @returns {string} - URL-safe base64 encoded token
-   */
   encodeTokenForWebSocket(token) {
     try {
       if (typeof token !== 'string' || token.length < 10) {

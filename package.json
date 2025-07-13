@@ -16,11 +16,11 @@
     "docker:dev:logs": "docker-compose -f docker-compose.dev.yml logs -f app",
     "docker:prod": "docker-compose up --build",
     "docker:prod:down": "docker-compose down",
-    "perf-test": "node tests/performance/runPerformanceTest.js",
-    "perf-test:quick": "USER_COUNT=10 TEST_DURATION=30000 node tests/performance/runPerformanceTest.js",
-    "perf-test:stress": "USER_COUNT=50 TEST_DURATION=90000 KEYSTROKE_INTERVAL=300 node tests/performance/runPerformanceTest.js",
-    "perf-test:stress-no-debounce": "USER_COUNT=50 TEST_DURATION=90000 KEYSTROKE_INTERVAL=300 DEBOUNCE_ENABLED=false node tests/performance/runPerformanceTest.js",
-    "test:debounce": "node tests/debounce-test.js",
+    "perf-test": "node tests/performance/ProfessionalTestSuite.js",
+    "perf-test:quick": "USER_COUNT=5 TEST_DURATION=30000 node tests/performance/ProfessionalTestSuite.js",
+    "perf-test:stress": "USER_COUNT=10 TEST_DURATION=90000 node tests/performance/ProfessionalTestSuite.js",
+    "perf-test:memory": "ENABLE_OPTIMIZATIONS=true node tests/performance/ProfessionalTestSuite.js",
+
     "verify:redis-sync": "node scripts/verify-redis-sync.js"
   },
   "keywords": [
