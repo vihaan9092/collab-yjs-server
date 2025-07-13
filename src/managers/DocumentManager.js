@@ -2,7 +2,7 @@ const IDocumentManager = require('../interfaces/IDocumentManager');
 const { getYDoc, docs, getDocumentStateSize, applyUpdateToDoc } = require('../utils/y-websocket-utils');
 const RedisDocumentSync = require('../services/RedisDocumentSync');
 const DocumentChunker = require('../optimizations/DocumentChunker');
-const MemoryManager = require('../optimizations/MemoryManager');
+// MemoryManager removed for deployment simplicity
 const ConnectionPool = require('../optimizations/ConnectionPool');
 const PerformanceMonitor = require('../optimizations/PerformanceMonitor');
 const { getDebounceConfig } = require('../config/debounceConfig');
@@ -29,14 +29,10 @@ class DocumentManager extends IDocumentManager {
       compressionEnabled: config.compressionEnabled !== false
     });
 
+    // MemoryManager removed - using system memory management only
+    this.memoryManager = null;
+
     if (optimizationsEnabled) {
-      this.memoryManager = new MemoryManager(logger, {
-        maxMemoryUsage: parseInt(process.env.MAX_MEMORY_USAGE) || config.maxMemoryUsage || 1024 * 1024 * 1024,
-        documentCacheSize: parseInt(process.env.DOCUMENT_CACHE_SIZE) || config.documentCacheSize || 25,
-        gcInterval: parseInt(process.env.MEMORY_GC_INTERVAL) || config.gcInterval || 30000,
-        gcThreshold: parseFloat(process.env.MEMORY_GC_THRESHOLD) || 0.85,
-        historyLimit: parseInt(process.env.DOCUMENT_HISTORY_LIMIT) || 25
-      });
 
       this.connectionPool = new ConnectionPool(logger, {
         maxConnectionsPerDocument: config.maxConnectionsPerDocument || 50,
@@ -89,16 +85,7 @@ class DocumentManager extends IDocumentManager {
    * Setup optimization event listeners
    */
   setupOptimizationListeners() {
-    if (this.memoryManager) {
-      this.memoryManager.on('memoryStats', (stats) => {
-        if (stats.usagePercent > 0.9) {
-          this.logger.warn('High memory usage detected', {
-            usagePercent: `${(stats.usagePercent * 100).toFixed(2)}%`,
-            heapUsed: `${(stats.heapUsed / 1024 / 1024).toFixed(2)}MB`
-          });
-        }
-      });
-    }
+    // MemoryManager removed - no memory event listeners needed
 
     if (this.performanceMonitor) {
       this.performanceMonitor.on('alert', (alert) => {
@@ -540,11 +527,6 @@ class DocumentManager extends IDocumentManager {
    * Switch to active monitoring mode
    */
   switchToActiveMode() {
-    // Switch memory manager to active mode
-    if (this.memoryManager && this.memoryManager.switchToActiveMode) {
-      this.memoryManager.switchToActiveMode();
-    }
-
     // Switch performance monitor to active mode
     if (this.performanceMonitor && this.performanceMonitor.switchToActiveMode) {
       this.performanceMonitor.switchToActiveMode();
@@ -557,11 +539,6 @@ class DocumentManager extends IDocumentManager {
    * Switch to idle monitoring mode
    */
   switchToIdleMode() {
-    // Switch memory manager to idle mode
-    if (this.memoryManager && this.memoryManager.switchToIdleMode) {
-      this.memoryManager.switchToIdleMode();
-    }
-
     // Switch performance monitor to idle mode
     if (this.performanceMonitor && this.performanceMonitor.switchToIdleMode) {
       this.performanceMonitor.switchToIdleMode();
@@ -582,11 +559,7 @@ class DocumentManager extends IDocumentManager {
         global.gc();
       }
 
-      // Clear any cached data
-      if (this.memoryManager && this.memoryManager.documentCache) {
-        this.memoryManager.documentCache.clear();
-      }
-
+      // MemoryManager removed - using basic cleanup only
       this.logger.info('Aggressive idle cleanup completed');
     } catch (error) {
       this.logger.error('Aggressive cleanup failed', error);
@@ -625,10 +598,7 @@ class DocumentManager extends IDocumentManager {
       docs.clear();
     }
 
-    // Cleanup optimization components
-    if (this.memoryManager) {
-      this.memoryManager.destroy();
-    }
+    // MemoryManager removed - no cleanup needed
     if (this.connectionPool) {
       this.connectionPool.destroy();
     }
