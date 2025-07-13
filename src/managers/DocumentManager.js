@@ -2,7 +2,6 @@ const IDocumentManager = require('../interfaces/IDocumentManager');
 const { getYDoc, docs, getDocumentStateSize, applyUpdateToDoc } = require('../utils/y-websocket-utils');
 const RedisDocumentSync = require('../services/RedisDocumentSync');
 const DocumentChunker = require('../optimizations/DocumentChunker');
-// MemoryManager removed for deployment simplicity
 const ConnectionPool = require('../optimizations/ConnectionPool');
 const PerformanceMonitor = require('../optimizations/PerformanceMonitor');
 const { getDebounceConfig } = require('../config/debounceConfig');
@@ -28,9 +27,6 @@ class DocumentManager extends IDocumentManager {
       chunkSize: config.chunkSize || 64 * 1024,
       compressionEnabled: config.compressionEnabled !== false
     });
-
-    // MemoryManager removed - using system memory management only
-    this.memoryManager = null;
 
     if (optimizationsEnabled) {
 
@@ -85,7 +81,6 @@ class DocumentManager extends IDocumentManager {
    * Setup optimization event listeners
    */
   setupOptimizationListeners() {
-    // MemoryManager removed - no memory event listeners needed
 
     if (this.performanceMonitor) {
       this.performanceMonitor.on('alert', (alert) => {
@@ -559,7 +554,6 @@ class DocumentManager extends IDocumentManager {
         global.gc();
       }
 
-      // MemoryManager removed - using basic cleanup only
       this.logger.info('Aggressive idle cleanup completed');
     } catch (error) {
       this.logger.error('Aggressive cleanup failed', error);
@@ -598,7 +592,6 @@ class DocumentManager extends IDocumentManager {
       docs.clear();
     }
 
-    // MemoryManager removed - no cleanup needed
     if (this.connectionPool) {
       this.connectionPool.destroy();
     }
